@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 import { Check, Wrench } from "lucide-react";
 import Button from "@/components/Button";
+import Link from "next/link";
 import StatusBadge from "@/components/StatusBadge";
-import { floorLabel, formatCurrency } from "@/lib/format";
+import { floorLabel, formatCurrency, formatDate } from "@/lib/format";
 import {
   isEmail,
   isPhone,
@@ -159,6 +160,16 @@ export const masterDataConfigs: Record<string, ResourceConfig> = {
           { value: "Maintenance", label: "Maintenance" },
         ],
       },
+      {
+        name: "booking_info",
+        label: "Booking info",
+        options: [
+          { value: "", label: "All booking info" },
+          { value: "Free now", label: "Free now" },
+          { value: "Reserved", label: "Reserved" },
+          { value: "Occupied", label: "Occupied" },
+        ],
+      },
     ],
     columns: [
       { key: "room_no", header: "Room No" },
@@ -166,10 +177,62 @@ export const masterDataConfigs: Record<string, ResourceConfig> = {
       { key: "floor_no", header: "Floor", render: (row) => floorLabel(row.floor_no as number) },
       { key: "capacity", header: "Capacity" },
       { key: "price_per_night", header: "Price per night", render: (row) => formatCurrency(row.price_per_night as number) },
-      { key: "status", header: "Status", render: (row) => <StatusBadge status={String(row.status)} /> },
+      {
+        key: "status",
+        header: "Status",
+        render: (row) => {
+          const current = row.availability_on_status
+            ? String(row.availability_on_status)
+            : String(row.status);
+          const guest = row.availability_on_guest
+            ? ` · ${String(row.availability_on_guest)}`
+            : "";
+          return (
+            <span className="room-status-cell">
+              <StatusBadge status={current} />
+              {row.status === "Available" && row.next_booking_id != null && (
+                <StatusBadge status="Reserved" />
+              )}
+              {current === "Booked" && guest && (
+                <small className="muted">{guest}</small>
+              )}
+            </span>
+          );
+        },
+      },
+      {
+        key: "booking",
+        header: "Booking",
+        sortable: false,
+        render: (row) => (
+          <span className="room-booking-cell">
+            {row.current_booking_id != null && (
+              <span>
+                <Link href={`/bookings/${row.current_booking_id}`}>
+                  Occupied until {formatDate(row.current_check_out as string)} -{" "}
+                  {String(row.current_guest)}
+                </Link>
+              </span>
+            )}
+            {row.next_booking_id != null && (
+              <span>
+                <Link href={`/bookings/${row.next_booking_id}`}>
+                  Reserved {formatDate(row.next_check_in as string)} to{" "}
+                  {formatDate(row.next_check_out as string)} -{" "}
+                  {String(row.next_guest)}
+                </Link>
+              </span>
+            )}
+            {row.current_booking_id == null && row.next_booking_id == null && (
+              <span className="muted">-</span>
+            )}
+          </span>
+        ),
+      },
     ],
     extraAction: (row, onToggle, loading) => {
       const occupied = row.status === "Occupied";
+      const reserved = row.next_booking_id != null;
       const nextStatus =
         row.status === "Available" ? "Maintenance" : "Available";
       return (
@@ -178,15 +241,19 @@ export const masterDataConfigs: Record<string, ResourceConfig> = {
           variant="secondary"
           size="sm"
           loading={loading}
-          disabled={occupied}
+          disabled={occupied || (reserved && row.status === "Available")}
           title={
             occupied
               ? "Room status is managed automatically while a guest is checked in"
+              : reserved && row.status === "Available"
+                ? "Room has upcoming bookings and cannot be set to Maintenance"
               : `Mark ${nextStatus.toLowerCase()}`
           }
           aria-label={
             occupied
               ? "Room status cannot be changed while occupied"
+              : reserved && row.status === "Available"
+                ? "Room is reserved and cannot be set to Maintenance"
               : `Mark room ${nextStatus.toLowerCase()}`
           }
           onClick={() => onToggle(row)}

@@ -58,7 +58,7 @@ export default function BookingsPage() {
     "Checked-Out": 0,
     Cancelled: 0,
   });
-  const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
@@ -70,11 +70,12 @@ export default function BookingsPage() {
   const [finalBill, setFinalBill] = useState<Bill | null>(null);
 
   const searchChanged = useCallback((value: string) => {
-    setLoading(true);
+    setHasLoaded(false);
     setSearch(value);
   }, []);
 
   const loadBookings = useCallback(async () => {
+    setHasLoaded(false);
     try {
       const params = new URLSearchParams();
       if (status) params.set("status", status);
@@ -90,7 +91,7 @@ export default function BookingsPage() {
     } catch {
       setBookings([]);
     } finally {
-      setLoading(false);
+      setHasLoaded(true);
     }
   }, [from, request, search, status, to]);
 
@@ -114,7 +115,7 @@ export default function BookingsPage() {
       } catch {
         if (active) setBookings([]);
       } finally {
-        if (active) setLoading(false);
+        if (active) setHasLoaded(true);
       }
     }
     void fetchBookings();
@@ -131,7 +132,7 @@ export default function BookingsPage() {
         { method: "POST" },
         `Booking #${booking.booking_id} checked in`,
       );
-      setLoading(true);
+      setHasLoaded(false);
       await loadBookings();
     } catch {
       // useApi displays request errors as toasts.
@@ -149,7 +150,7 @@ export default function BookingsPage() {
         `Booking #${booking.booking_id} checked out`,
       );
       setFinalBill(bill);
-      setLoading(true);
+      setHasLoaded(false);
       await loadBookings();
     } catch {
       // useApi displays request errors as toasts.
@@ -168,7 +169,7 @@ export default function BookingsPage() {
         `Booking #${cancelTarget.booking_id} cancelled`,
       );
       setCancelTarget(null);
-      setLoading(true);
+      setHasLoaded(false);
       await loadBookings();
     } catch {
       // useApi displays request errors as toasts.
@@ -258,7 +259,7 @@ export default function BookingsPage() {
             className={status === tab.status ? "active" : ""}
             key={tab.label}
             onClick={() => {
-              setLoading(true);
+              setHasLoaded(false);
               setStatus(tab.status);
             }}
           >
@@ -279,7 +280,7 @@ export default function BookingsPage() {
           type="date"
           value={from}
           onChange={(event) => {
-            setLoading(true);
+            setHasLoaded(false);
             setFrom(event.target.value);
           }}
         />
@@ -290,7 +291,7 @@ export default function BookingsPage() {
           value={to}
           min={from || undefined}
           onChange={(event) => {
-            setLoading(true);
+            setHasLoaded(false);
             setTo(event.target.value);
           }}
         />
@@ -299,7 +300,7 @@ export default function BookingsPage() {
       <DataTable<Booking>
         columns={columns}
         rows={bookings}
-        loading={loading}
+        loading={!hasLoaded}
         emptyMessage="No bookings match these filters."
         rowKey={(row) => row.booking_id}
         actions={(booking) => {
@@ -387,8 +388,13 @@ export default function BookingsPage() {
             </dl>
             {finalBill.balance > 0 && (
               <div className="balance-warning" role="status">
-                Balance due: {formatCurrency(finalBill.balance)}. Payments are
-                added in Phase 4.
+                <span>Balance due: {formatCurrency(finalBill.balance)}.</span>
+                <Link
+                  href={`/bookings/${finalBill.booking_id}`}
+                  className="button button-primary button-sm"
+                >
+                  Record payment
+                </Link>
               </div>
             )}
           </div>
@@ -400,7 +406,7 @@ export default function BookingsPage() {
         onClose={() => setNewBookingOpen(false)}
         onCreated={() => {
           setNewBookingOpen(false);
-          setLoading(true);
+          setHasLoaded(false);
           void loadBookings();
         }}
       />

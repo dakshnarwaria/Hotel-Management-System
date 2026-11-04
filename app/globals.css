@@ -1182,6 +1182,359 @@ a {
   margin-top: 1.25rem;
 }
 
+.detail-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.detail-title {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.back-link-inline {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.back-link-inline:hover,
+.table-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.detail-title-row,
+.detail-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.detail-header-actions {
+  justify-content: flex-end;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 1rem;
+}
+
+.detail-card {
+  min-width: 0;
+  padding: 1.15rem;
+}
+
+.detail-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.detail-card-header h2 {
+  margin: 0.3rem 0 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.35rem;
+  font-weight: 500;
+}
+
+.guest-detail-block {
+  display: grid;
+  gap: 0.3rem;
+  margin-bottom: 1rem;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.guest-detail-block strong {
+  color: var(--foreground);
+  font-size: 1.05rem;
+}
+
+.stay-detail-list,
+.bill-summary-list {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0;
+}
+
+.stay-detail-list > div,
+.bill-summary-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.stay-detail-list dt,
+.bill-summary-list dt {
+  color: var(--muted);
+}
+
+.stay-detail-list dd,
+.bill-summary-list dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+}
+
+.bill-summary-list .bill-total,
+.bill-summary-list .bill-due {
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+
+.bill-summary-list .bill-total {
+  font-size: 1.05rem;
+}
+
+.bill-summary-list .bill-due dd {
+  color: var(--accent);
+}
+
+.detail-table-scroll {
+  overflow-x: auto;
+}
+
+.detail-table {
+  width: 100%;
+}
+
+.detail-table tfoot th {
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+  text-align: left;
+}
+
+.detail-table tfoot th:last-child {
+  text-align: right;
+}
+
+.empty-cell {
+  padding: 1.25rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.payment-balance-banner,
+.line-total-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.8rem 1rem;
+  background: color-mix(in srgb, var(--accent) 7%, var(--background));
+}
+
+.payment-balance-banner strong,
+.line-total-preview strong {
+  color: var(--accent);
+  font-size: 1.05rem;
+}
+
+.payment-amount-field {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.65rem;
+}
+
+.payment-amount-field > .form-field {
+  flex: 1;
+}
+
+.payment-booking-label {
+  margin: -0.5rem 0 0;
+  font-size: 0.82rem;
+}
+
+.method-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
+.method-cash {
+  background: color-mix(in srgb, #8b674c 16%, var(--background));
+  color: color-mix(in srgb, #8b674c 80%, var(--foreground));
+}
+
+.method-card {
+  background: color-mix(in srgb, #a9713a 17%, var(--background));
+  color: color-mix(in srgb, #a9713a 88%, var(--foreground));
+}
+
+.method-upi {
+  background: color-mix(in srgb, #71624f 16%, var(--background));
+  color: color-mix(in srgb, #71624f 88%, var(--foreground));
+}
+
+.payment-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1.25rem;
+}
+
+.payment-summary-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0.25rem 0.7rem;
+  padding: 1rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.payment-summary-card strong {
+  grid-column: 2;
+  color: var(--foreground);
+  font-size: 1.1rem;
+}
+
+.payment-summary-icon {
+  grid-row: span 2;
+  display: grid;
+  width: 2.4rem;
+  height: 2.4rem;
+  place-items: center;
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--accent) 12%, var(--background));
+  color: var(--accent);
+}
+
+.payment-toolbar {
+  align-items: flex-end;
+}
+
+.payment-toolbar .form-field {
+  min-width: 9rem;
+}
+
+.payment-toolbar .search-input {
+  flex: 1;
+}
+
+.table-link {
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.detail-loading {
+  display: grid;
+  gap: 1rem;
+  padding: 1.5rem;
+}
+
+.invoice-heading {
+  display: none;
+}
+
+.status-reserved {
+  background: color-mix(in srgb, #a9713a 14%, var(--background));
+  color: var(--accent);
+}
+
+.status-paid-in-full,
+.status-free {
+  background: var(--status-available-bg);
+  color: var(--status-available-text);
+}
+
+.status-booked {
+  background: var(--status-occupied-bg);
+  color: var(--status-occupied-text);
+}
+
+@media (max-width: 760px) {
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .payment-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media print {
+  :root,
+  :root.dark {
+    color-scheme: light;
+    --background: #fff;
+    --foreground: #111;
+    --muted: #444;
+    --border: #bbb;
+    --shadow: none;
+  }
+
+  html,
+  body,
+  .app-layout,
+  .main-content {
+    min-height: 0;
+    background: #fff !important;
+    color: #111 !important;
+  }
+
+  .sidebar,
+  .print-hide,
+  .detail-header-actions,
+  .modal-backdrop,
+  .back-link-inline,
+  button,
+  .button {
+    display: none !important;
+  }
+
+  .main-content {
+    width: 100%;
+    padding: 0;
+  }
+
+  .invoice-heading {
+    display: block;
+    margin-bottom: 1rem;
+    color: #111;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1.7rem;
+    font-weight: 700;
+    text-align: center;
+  }
+
+  .detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .surface {
+    box-shadow: none;
+    background: #fff !important;
+    color: #111 !important;
+    break-inside: avoid;
+  }
+
+  .status-badge,
+  .method-badge {
+    border: 1px solid #777;
+    background: #fff !important;
+    color: #111 !important;
+  }
+}
+
 @media (min-width: 640px) {
   .resource-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));

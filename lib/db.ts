@@ -25,6 +25,7 @@ function getPool(): Pool {
     password: DB_PASSWORD,
     database: DB_NAME,
     decimalNumbers: true,
+    dateStrings: true,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,

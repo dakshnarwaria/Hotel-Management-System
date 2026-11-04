@@ -16,7 +16,36 @@ const statuses = ["Available", "Occupied", "Maintenance"] as const;
 const manualStatuses = ["Available", "Maintenance"] as const;
 
 const roomSelect =
-  "SELECT r.room_no, r.type_id, rt.type_name, rt.price_per_night, rt.capacity, r.floor_no, r.status FROM Rooms r JOIN Room_Types rt ON rt.type_id = r.type_id";
+  `SELECT r.room_no, r.type_id, rt.type_name, rt.price_per_night,
+          rt.capacity, r.floor_no, r.status,
+          (SELECT b.booking_id FROM Bookings b
+           WHERE b.room_no = r.room_no AND b.status = 'Checked-In'
+           ORDER BY b.check_in LIMIT 1) AS current_booking_id,
+          (SELECT g.full_name FROM Bookings b
+           JOIN Guests g ON g.guest_id = b.guest_id
+           WHERE b.room_no = r.room_no AND b.status = 'Checked-In'
+           ORDER BY b.check_in LIMIT 1) AS current_guest,
+          (SELECT b.check_out FROM Bookings b
+           WHERE b.room_no = r.room_no AND b.status = 'Checked-In'
+           ORDER BY b.check_in LIMIT 1) AS current_check_out,
+          (SELECT b.booking_id FROM Bookings b
+           WHERE b.room_no = r.room_no AND b.status = 'Confirmed'
+             AND b.check_out > CURDATE()
+           ORDER BY b.check_in LIMIT 1) AS next_booking_id,
+          (SELECT g.full_name FROM Bookings b
+           JOIN Guests g ON g.guest_id = b.guest_id
+           WHERE b.room_no = r.room_no AND b.status = 'Confirmed'
+             AND b.check_out > CURDATE()
+           ORDER BY b.check_in LIMIT 1) AS next_guest,
+          (SELECT b.check_in FROM Bookings b
+           WHERE b.room_no = r.room_no AND b.status = 'Confirmed'
+             AND b.check_out > CURDATE()
+           ORDER BY b.check_in LIMIT 1) AS next_check_in,
+          (SELECT b.check_out FROM Bookings b
+           WHERE b.room_no = r.room_no AND b.status = 'Confirmed'
+             AND b.check_out > CURDATE()
+           ORDER BY b.check_in LIMIT 1) AS next_check_out
+   FROM Rooms r JOIN Room_Types rt ON rt.type_id = r.type_id`;
 
 function errors(values: (string | null)[]) {
   return values.filter((value): value is string => value !== null);
@@ -67,11 +96,23 @@ async function getRoom(roomNo: number) {
   return rows[0] ?? null;
 }
 
+async function hasUpcomingOrCurrentBooking(roomNo: number) {
+  const rows = await query<RowDataPacket[]>(
+    `SELECT booking_id FROM Bookings
+     WHERE room_no = ? AND status IN ('Confirmed', 'Checked-In')
+       AND check_out > CURDATE() LIMIT 1`,
+    [roomNo],
+  );
+  return rows.length > 0;
+}
+
 export async function listRooms(request: Request) {
   const params = new URL(request.url).searchParams;
   const search = params.get("search")?.trim() ?? "";
   const status = params.get("status")?.trim() ?? "";
   const rawTypeId = params.get("type_id")?.trim() ?? "";
+  const bookingInfo = params.get("booking_info")?.trim() ?? "";
+  const availabilityOn = params.get("availability_on")?.trim() ?? "";
   const filters: string[] = [];
   const values: (string | number)[] = [];
   const validation: string[] = [];
@@ -92,18 +133,66 @@ export async function listRooms(request: Request) {
       values.push(Number(rawTypeId));
     }
   }
+  if (bookingInfo) {
+    const choices = ["Free now", "Reserved", "Occupied"];
+    const bookingInfoError = oneOf(bookingInfo, choices, "Booking info");
+    if (bookingInfoError) validation.push(bookingInfoError);
+    else if (bookingInfo === "Free now") {
+      filters.push("r.status = 'Available' AND NOT EXISTS (SELECT 1 FROM Bookings bx WHERE bx.room_no = r.room_no AND bx.status = 'Checked-In')");
+    } else if (bookingInfo === "Reserved") {
+      filters.push("EXISTS (SELECT 1 FROM Bookings bx WHERE bx.room_no = r.room_no AND bx.status = 'Confirmed' AND bx.check_out > CURDATE())");
+    } else {
+      filters.push("EXISTS (SELECT 1 FROM Bookings bx WHERE bx.room_no = r.room_no AND bx.status = 'Checked-In')");
+    }
+  }
+  if (availabilityOn) {
+    const date = new Date(`${availabilityOn}T00:00:00Z`);
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(availabilityOn) ||
+      Number.isNaN(date.getTime()) ||
+      date.toISOString().slice(0, 10) !== availabilityOn
+    ) {
+      validation.push("Availability date must be a valid date (YYYY-MM-DD)");
+    }
+  }
   if (validation.length) return fail(validation.join(", "));
   if (search) {
     filters.push("CAST(r.room_no AS CHAR) LIKE ?");
     values.push(`%${search}%`);
   }
   const where = filters.length ? ` WHERE ${filters.join(" AND ")}` : "";
+  const availabilityColumns = availabilityOn
+    ? `, CASE
+         WHEN r.status = 'Maintenance' THEN 'Maintenance'
+         WHEN EXISTS (SELECT 1 FROM Bookings ba
+                      WHERE ba.room_no = r.room_no
+                        AND ba.status IN ('Confirmed','Checked-In')
+                        AND ba.check_in <= ? AND ba.check_out > ?)
+           THEN 'Booked'
+         ELSE 'Free'
+       END AS availability_on_status,
+       (SELECT ga.full_name FROM Bookings ba
+        JOIN Guests ga ON ga.guest_id = ba.guest_id
+        WHERE ba.room_no = r.room_no
+          AND ba.status IN ('Confirmed','Checked-In')
+          AND ba.check_in <= ? AND ba.check_out > ?
+        ORDER BY ba.check_in LIMIT 1) AS availability_on_guest`
+    : "";
+  const select = availabilityOn
+    ? roomSelect.replace(
+        "FROM Rooms r JOIN Room_Types rt ON rt.type_id = r.type_id",
+        `${availabilityColumns} FROM Rooms r JOIN Room_Types rt ON rt.type_id = r.type_id`,
+      )
+    : roomSelect;
+  const queryValues = availabilityOn
+    ? [availabilityOn, availabilityOn, availabilityOn, availabilityOn, ...values]
+    : values;
 
   try {
     return ok(
       await query<RowDataPacket[]>(
-        `${roomSelect}${where} ORDER BY r.room_no DESC`,
-        values,
+        `${select}${where} ORDER BY r.room_no DESC`,
+        queryValues,
       ),
     );
   } catch (error) {
@@ -164,6 +253,15 @@ async function changeRoomStatus(roomNo: number, status: unknown) {
     if (current.status === "Occupied") {
       return fail("Room has a guest checked in", 400);
     }
+    if (
+      statusValue === "Maintenance" &&
+      (await hasUpcomingOrCurrentBooking(roomNo))
+    ) {
+      return fail(
+        "Room has upcoming or current bookings and cannot be set to Maintenance",
+        400,
+      );
+    }
     await query("UPDATE Rooms SET status = ? WHERE room_no = ?", [
       statusValue,
       roomNo,
@@ -192,6 +290,15 @@ export async function updateRoom(
     if (!current) return fail("Room not found", 404);
     if (values.status && current.status === "Occupied") {
       return fail("Room has a guest checked in", 400);
+    }
+    if (
+      values.status === "Maintenance" &&
+      (await hasUpcomingOrCurrentBooking(roomNo))
+    ) {
+      return fail(
+        "Room has upcoming or current bookings and cannot be set to Maintenance",
+        400,
+      );
     }
     const assignments = ["type_id = ?", "floor_no = ?"];
     const params: (number | string)[] = [values.type_id, values.floor_no];

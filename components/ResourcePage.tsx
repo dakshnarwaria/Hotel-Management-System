@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2, X } from "lucide-react";
 import Button from "@/components/Button";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import DataTable from "@/components/DataTable";
@@ -20,9 +20,10 @@ export default function ResourcePage({ resource }: { resource: string }) {
   const config = masterDataConfigs[resource];
   const request = useApi();
   const [rows, setRows] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [availabilityOn, setAvailabilityOn] = useState("");
   const [roomTypes, setRoomTypes] = useState<Row[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
@@ -36,16 +37,20 @@ export default function ResourcePage({ resource }: { resource: string }) {
   );
 
   const searchChanged = useCallback((value: string) => {
-    setLoading(true);
+    setHasLoaded(false);
     setSearch(value);
   }, []);
 
   const load = useCallback(async () => {
+    setHasLoaded(false);
     try {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       for (const [key, value] of Object.entries(filters)) {
         if (value) params.set(key, value);
+      }
+      if (resource === "rooms" && availabilityOn) {
+        params.set("availability_on", availabilityOn);
       }
       const queryString = params.size ? `?${params.toString()}` : "";
       const data = await request<Row[]>(`${config.endpoint}${queryString}`);
@@ -53,14 +58,15 @@ export default function ResourcePage({ resource }: { resource: string }) {
     } catch {
       setRows([]);
     } finally {
-      setLoading(false);
+      setHasLoaded(true);
     }
-  }, [config.endpoint, filters, request, search]);
+  }, [availabilityOn, config.endpoint, filters, request, resource, search]);
 
   useEffect(() => {
     let active = true;
     async function fetchRows() {
       try {
+        setHasLoaded(false);
         const params = new URLSearchParams();
         if (search) params.set("search", search);
         for (const [key, value] of Object.entries(filters)) {
@@ -72,7 +78,7 @@ export default function ResourcePage({ resource }: { resource: string }) {
       } catch {
         if (active) setRows([]);
       } finally {
-        if (active) setLoading(false);
+        if (active) setHasLoaded(true);
       }
     }
     void fetchRows();
@@ -167,7 +173,7 @@ export default function ResourcePage({ resource }: { resource: string }) {
         `${config.title.slice(0, -1)} ${editing ? "updated" : "added"} successfully`,
       );
       setModalOpen(false);
-      setLoading(true);
+      setHasLoaded(false);
       await load();
     } catch {
       // useApi displays request errors as toasts.
@@ -186,7 +192,7 @@ export default function ResourcePage({ resource }: { resource: string }) {
         `${config.title.slice(0, -1)} deleted successfully`,
       );
       setDeleting(null);
-      setLoading(true);
+      setHasLoaded(false);
       await load();
     } catch {
       // useApi displays request errors as toasts.
@@ -206,7 +212,7 @@ export default function ResourcePage({ resource }: { resource: string }) {
         { method: "PATCH", body: JSON.stringify({ status }) },
         `Room ${roomNo} marked ${status.toLowerCase()}`,
       );
-      setLoading(true);
+      setHasLoaded(false);
       await load();
     } catch {
       // useApi displays request errors as toasts.
@@ -219,7 +225,7 @@ export default function ResourcePage({ resource }: { resource: string }) {
     () => config.columns,
     [config.columns],
   );
-  const dataKey = `${search}:${Object.values(filters).join(":")}`;
+  const dataKey = `${search}:${Object.values(filters).join(":")}:${availabilityOn}`;
 
   return (
     <>
@@ -245,7 +251,7 @@ export default function ResourcePage({ resource }: { resource: string }) {
             <select
               value={filters[filter.name] ?? ""}
               onChange={(event) => {
-                setLoading(true);
+                setHasLoaded(false);
                 setFilters((current) => ({
                   ...current,
                   [filter.name]: event.target.value,
@@ -267,7 +273,7 @@ export default function ResourcePage({ resource }: { resource: string }) {
             <select
               value={filters.type_id ?? ""}
               onChange={(event) => {
-                setLoading(true);
+                setHasLoaded(false);
                 setFilters((current) => ({
                   ...current,
                   type_id: event.target.value,
@@ -284,13 +290,44 @@ export default function ResourcePage({ resource }: { resource: string }) {
             </select>
           </label>
         )}
+        {config.roomOptions && (
+          <div className="availability-date-filter">
+            <label className="filter-field">
+              <span className="sr-only">Availability on</span>
+              <input
+                type="date"
+                aria-label="Availability on"
+                value={availabilityOn}
+                onChange={(event) => {
+                  setHasLoaded(false);
+                  setAvailabilityOn(event.target.value);
+                }}
+              />
+            </label>
+            {availabilityOn && (
+              <Button
+                variant="secondary"
+                size="sm"
+                aria-label="Clear availability date"
+                title="Clear availability date"
+                onClick={() => {
+                  setHasLoaded(false);
+                  setAvailabilityOn("");
+                }}
+              >
+                <X size={14} />
+                Clear
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       <DataTable<Row>
         key={dataKey}
         columns={columns}
         rows={rows}
-        loading={loading}
+        loading={!hasLoaded}
         emptyMessage={`No ${config.title.toLowerCase()} found.`}
         rowKey={(row) => String(row[config.idKey])}
         actions={(row) => (
