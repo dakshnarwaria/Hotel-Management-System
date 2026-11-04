@@ -5,10 +5,8 @@ import { usePathname } from "next/navigation";
 import {
   BedDouble,
   BriefcaseBusiness,
-  ChartNoAxesCombined,
-  ClipboardList,
-  CreditCard,
   LayoutDashboard,
+  Tags,
   Users,
   Utensils,
 } from "lucide-react";
@@ -17,12 +15,10 @@ import ThemeToggle from "@/components/ThemeToggle";
 const navigation = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
   { label: "Guests", href: "/guests", icon: Users },
+  { label: "Room Types", href: "/room-types", icon: Tags },
   { label: "Rooms", href: "/rooms", icon: BedDouble },
-  { label: "Bookings", href: "/bookings", icon: ClipboardList },
-  { label: "Payments", href: "/payments", icon: CreditCard },
-  { label: "Services", href: "/services", icon: Utensils },
   { label: "Employees", href: "/employees", icon: BriefcaseBusiness },
-  { label: "Reports", href: "/reports", icon: ChartNoAxesCombined },
+  { label: "Services", href: "/services", icon: Utensils },
 ];
 
 export default function Sidebar() {
