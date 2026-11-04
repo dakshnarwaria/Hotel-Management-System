@@ -38,6 +38,10 @@ export default function Modal({ open, title, onClose, children }: Props) {
     initialFocus?.focus();
 
     function onKeyDown(event: KeyboardEvent) {
+      const backdrops = document.querySelectorAll(".modal-backdrop");
+      if (dialog?.closest(".modal-backdrop") !== backdrops[backdrops.length - 1]) {
+        return;
+      }
       if (event.key === "Escape") {
         event.preventDefault();
         onCloseRef.current();

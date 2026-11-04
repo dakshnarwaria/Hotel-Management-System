@@ -10,6 +10,7 @@ import Modal from "@/components/Modal";
 import PageHeader from "@/components/PageHeader";
 import SearchInput from "@/components/SearchInput";
 import StatusBadge from "@/components/StatusBadge";
+import GuestFormFields from "@/components/GuestFormFields";
 import { masterDataConfigs, type FormValues } from "@/components/masterDataConfigs";
 import { useApi } from "@/hooks/useApi";
 
@@ -341,7 +342,7 @@ export default function ResourcePage({ resource }: { resource: string }) {
               </span>
             </div>
           )}
-          {fields
+          {(resource === "guests" ? [] : fields)
             .filter((field) => !field.hideWhen?.(editing))
             .map((field) => {
               const value = formValues[field.name] ?? "";
@@ -375,8 +376,22 @@ export default function ResourcePage({ resource }: { resource: string }) {
                   placeholder={field.placeholder}
                   value={value}
                   readOnly={readOnly}
-                  min={field.type === "number" ? 0 : undefined}
-                  step={field.type === "number" ? "any" : undefined}
+                  min={
+                    field.name === "floor_no"
+                      ? 0
+                      : field.type === "number"
+                        ? 0
+                        : undefined
+                  }
+                  max={field.name === "floor_no" ? 100 : undefined}
+                  step={
+                    field.name === "floor_no"
+                      ? 1
+                      : field.type === "number"
+                        ? "any"
+                        : undefined
+                  }
+                  helperText={field.name === "floor_no" ? "0 = Ground floor" : undefined}
                   error={fieldErrors[field.name]}
                   disabled={saving}
                   onChange={(event) =>
@@ -385,6 +400,20 @@ export default function ResourcePage({ resource }: { resource: string }) {
                 />
               );
             })}
+          {resource === "guests" && (
+            <GuestFormFields
+              values={{
+                full_name: formValues.full_name ?? "",
+                phone: formValues.phone ?? "",
+                email: formValues.email ?? "",
+                city: formValues.city ?? "",
+                id_proof: formValues.id_proof ?? "",
+              }}
+              errors={fieldErrors}
+              disabled={saving}
+              onChange={(field, value) => updateField(field, value)}
+            />
+          )}
           <div className="form-actions">
             <Button
               variant="secondary"

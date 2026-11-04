@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   BedDouble,
   BriefcaseBusiness,
+  ClipboardList,
   LayoutDashboard,
   Tags,
   Users,
@@ -17,6 +18,7 @@ const navigation = [
   { label: "Guests", href: "/guests", icon: Users },
   { label: "Room Types", href: "/room-types", icon: Tags },
   { label: "Rooms", href: "/rooms", icon: BedDouble },
+  { label: "Bookings", href: "/bookings", icon: ClipboardList },
   { label: "Employees", href: "/employees", icon: BriefcaseBusiness },
   { label: "Services", href: "/services", icon: Utensils },
 ];

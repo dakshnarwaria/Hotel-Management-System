@@ -61,6 +61,17 @@ export function positiveInt(value: unknown, label: string): string | null {
     : `${label} must be a positive integer`;
 }
 
+export function nonNegativeInt(value: unknown, label: string): string | null {
+  if (value == null || String(value).trim() === "") {
+    return `${label} is required`;
+  }
+  const number = Number(String(value).trim());
+  if (!Number.isSafeInteger(number) || number < 0 || number > 100) {
+    return `${label} must be 0 (Ground) or a positive whole number`;
+  }
+  return null;
+}
+
 export function oneOf(
   value: unknown,
   list: readonly string[],

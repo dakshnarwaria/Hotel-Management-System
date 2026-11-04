@@ -2,13 +2,14 @@ import type { ReactNode } from "react";
 import { Check, Wrench } from "lucide-react";
 import Button from "@/components/Button";
 import StatusBadge from "@/components/StatusBadge";
-import { formatCurrency } from "@/lib/format";
+import { floorLabel, formatCurrency } from "@/lib/format";
 import {
   isEmail,
   isPhone,
   maxLen,
   nonNegativeNumber,
   oneOf,
+  nonNegativeInt,
   positiveInt,
   positiveNumber,
   required,
@@ -143,7 +144,7 @@ export const masterDataConfigs: Record<string, ResourceConfig> = {
     fields: [
       { name: "room_no", label: "Room number", type: "number", required: true, readOnlyOnEdit: true },
       { name: "type_id", label: "Room type", type: "select", required: true, options: emptyOption },
-      { name: "floor_no", label: "Floor", type: "number", required: true, validate: (value) => positiveInt(value, "Floor") },
+      { name: "floor_no", label: "Floor", type: "number", required: true, placeholder: "0 = Ground floor", validate: (value) => nonNegativeInt(value, "Floor") },
       { name: "status", label: "Status", type: "select", options: [{ value: "Available", label: "Available" }, { value: "Maintenance", label: "Maintenance" }], hideWhen: (row) => row?.status === "Occupied" },
     ],
     numberFields: ["room_no", "type_id", "floor_no"],
@@ -162,7 +163,7 @@ export const masterDataConfigs: Record<string, ResourceConfig> = {
     columns: [
       { key: "room_no", header: "Room No" },
       { key: "type_name", header: "Type" },
-      { key: "floor_no", header: "Floor" },
+      { key: "floor_no", header: "Floor", render: (row) => floorLabel(row.floor_no as number) },
       { key: "capacity", header: "Capacity" },
       { key: "price_per_night", header: "Price per night", render: (row) => formatCurrency(row.price_per_night as number) },
       { key: "status", header: "Status", render: (row) => <StatusBadge status={String(row.status)} /> },
@@ -203,7 +204,7 @@ export const masterDataConfigs: Record<string, ResourceConfig> = {
       errorsFor(values, {
         room_no: editing ? null : positiveInt(values.room_no, "Room number"),
         type_id: positiveInt(values.type_id, "Room type"),
-        floor_no: positiveInt(values.floor_no, "Floor"),
+        floor_no: nonNegativeInt(values.floor_no, "Floor"),
       }),
   },
   employees: {

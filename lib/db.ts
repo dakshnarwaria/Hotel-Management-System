@@ -1,4 +1,9 @@
-import mysql, { type Pool, type QueryResult, type RowDataPacket } from "mysql2/promise";
+import mysql, {
+  type Pool,
+  type PoolConnection,
+  type QueryResult,
+  type RowDataPacket,
+} from "mysql2/promise";
 
 let pool: Pool | undefined;
 
@@ -34,4 +39,15 @@ export async function query<T extends QueryResult = RowDataPacket[]>(
 ): Promise<T> {
   const [rows] = await getPool().execute<T>(sql, params);
   return rows;
+}
+
+export async function withConnection<T>(
+  callback: (connection: PoolConnection) => Promise<T>,
+): Promise<T> {
+  const connection = await getPool().getConnection();
+  try {
+    return await callback(connection);
+  } finally {
+    connection.release();
+  }
 }

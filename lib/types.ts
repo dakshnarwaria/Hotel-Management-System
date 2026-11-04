@@ -41,4 +41,35 @@ export interface Service {
   times_ordered: number;
 }
 
+export interface Booking {
+  booking_id: number;
+  guest_id: number;
+  full_name: string;
+  phone: string;
+  room_no: number;
+  type_name: string;
+  emp_id: number;
+  emp_name: string;
+  check_in: string | Date;
+  check_out: string | Date;
+  nights: number;
+  no_of_guests: number;
+  status: "Confirmed" | "Checked-In" | "Checked-Out" | "Cancelled";
+  room_charge: number;
+  services_total: number;
+  grand_total: number;
+  paid: number;
+  balance: number;
+}
+
+export interface AvailableRoom {
+  room_no: number;
+  floor_no: number;
+  type_name: string;
+  capacity: number;
+  price_per_night: number;
+  nights: number;
+  estimated_total: number;
+}
+
 export type ResourceRow = Guest | RoomType | Room | Employee | Service;

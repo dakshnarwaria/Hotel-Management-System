@@ -7,6 +7,7 @@ import {
   readBody,
 } from "@/lib/master-data-api";
 import {
+  nonNegativeInt,
   oneOf,
   positiveInt,
 } from "@/lib/validate";
@@ -36,7 +37,7 @@ function roomValues(body: Record<string, unknown>, creating: boolean) {
   const validation = errors([
     ...(creating ? [positiveInt(body.room_no, "Room number")] : []),
     positiveInt(body.type_id, "Room type"),
-    positiveInt(body.floor_no, "Floor"),
+    nonNegativeInt(body.floor_no, "Floor"),
     ...(body.status == null && !creating
       ? []
       : [

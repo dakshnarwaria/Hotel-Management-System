@@ -5,6 +5,7 @@ import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react
 type BaseProps = {
   label: string;
   error?: string;
+  helperText?: string;
   required?: boolean;
   children?: ReactNode;
 };
@@ -18,6 +19,7 @@ type SelectProps = BaseProps &
 export function FormField({
   label,
   error,
+  helperText,
   required = false,
   className = "",
   id,
@@ -37,6 +39,7 @@ export function FormField({
         aria-describedby={error ? `${fieldId}-error` : undefined}
         className={`field-control ${className}`.trim()}
       />
+      {helperText && <span className="field-helper">{helperText}</span>}
       {error && (
         <span className="field-error" id={`${fieldId}-error`}>
           {error}
