@@ -81,7 +81,7 @@ export default function RecordPaymentModal({
       { value: "", label: "Select a booking" },
       ...bookings.map((booking) => ({
         value: String(booking.booking_id),
-        label: `#${booking.booking_id} · ${booking.full_name} · Room ${booking.room_no} · Due ${formatCurrency(booking.balance)}`,
+        label: `#${booking.booking_id} · ${booking.full_name} · Room ${booking.room_no} · Remaining ${formatCurrency(booking.balance)}`,
       })),
     ],
     [bookings],
@@ -109,7 +109,7 @@ export default function RecordPaymentModal({
     else if (!/^\d+(?:\.\d{1,2})?$/.test(amount.trim())) {
       nextErrors.amount = "Amount must have at most 2 decimal places";
     } else if (Number(amount) > availableBalance) {
-      nextErrors.amount = "Amount cannot exceed the outstanding balance";
+      nextErrors.amount = "Payment exceeds the remaining amount";
     }
     const methodRequired = method ? null : "Method is required";
     const methodError = methodRequired ?? oneOf(method, ["Cash", "Card", "UPI"], "Method");
@@ -144,6 +144,10 @@ export default function RecordPaymentModal({
   return (
     <Modal open={open} title="Record payment" onClose={close}>
       <form className="resource-form" onSubmit={(event) => void submit(event)} noValidate>
+        <div className="payment-balance-banner">
+          <span>Remaining</span>
+          <strong>{formatCurrency(availableBalance)}</strong>
+        </div>
         {!fixedBooking && (
           <SelectField
             name="booking_id"
@@ -156,10 +160,6 @@ export default function RecordPaymentModal({
             onChange={(event) => setSelectedId(event.target.value)}
           />
         )}
-        <div className="payment-balance-banner">
-          <span>Outstanding balance</span>
-          <strong>{formatCurrency(availableBalance)}</strong>
-        </div>
         {!fixedBooking && selectedBooking && (
           <p className="muted payment-booking-label">
             {selectedBooking.full_name} · Room {selectedBooking.room_no}
@@ -186,7 +186,7 @@ export default function RecordPaymentModal({
             disabled={saving || availableBalance <= 0}
             onClick={() => setAmount(availableBalance.toFixed(2))}
           >
-            Pay full balance
+            Pay full remaining amount
           </Button>
         </div>
         <SelectField

@@ -73,6 +73,89 @@ export async function createServiceOrder(request: Request) {
   }
 }
 
+export async function listServiceOrders(request: Request) {
+  const params = new URL(request.url).searchParams;
+  const rawServiceId = params.get("service_id")?.trim() ?? "";
+  const from = params.get("from")?.trim() ?? "";
+  const to = params.get("to")?.trim() ?? "";
+  const search = params.get("search")?.trim() ?? "";
+  const errors: string[] = [];
+
+  if (rawServiceId) {
+    const serviceError = positiveInt(rawServiceId, "Service");
+    if (serviceError) errors.push(serviceError);
+  }
+  if (Boolean(from) !== Boolean(to)) errors.push("Both from and to dates are required");
+  if (from && !isValidDate(from)) errors.push("From must be a valid date (YYYY-MM-DD)");
+  if (to && !isValidDate(to)) errors.push("To must be a valid date (YYYY-MM-DD)");
+  if (from && to && isValidDate(from) && isValidDate(to) && to < from) {
+    errors.push("To date must be on or after from date");
+  }
+  if (errors.length) return fail(errors.join(", "));
+
+  const filters: string[] = [];
+  const values: (string | number)[] = [];
+  if (rawServiceId) {
+    filters.push("o.service_id = ?");
+    values.push(Number(rawServiceId));
+  }
+  if (from) {
+    filters.push("o.order_date >= ? AND o.order_date <= ?");
+    values.push(from, to);
+  }
+  if (search) {
+    const pattern = `%${search}%`;
+    filters.push("(g.full_name LIKE ? OR CAST(b.booking_id AS CHAR) LIKE ?)");
+    values.push(pattern, pattern);
+  }
+
+  const where = filters.length ? ` WHERE ${filters.join(" AND ")}` : "";
+  const fromSql = `FROM Service_Orders o
+    JOIN Services s ON s.service_id = o.service_id
+    JOIN Bookings b ON b.booking_id = o.booking_id
+    JOIN Guests g ON g.guest_id = b.guest_id${where}`;
+
+  try {
+    const [orders, summaries, topServices] = await Promise.all([
+      query<RowDataPacket[]>(
+        `SELECT o.order_id, o.order_date, g.full_name, b.booking_id,
+                b.room_no, b.status AS booking_status, o.service_id,
+                s.service_name, s.price, o.quantity,
+                (s.price * o.quantity) AS line_total
+         ${fromSql}
+         ORDER BY o.order_date DESC, o.order_id DESC`,
+        values,
+      ),
+      query<RowDataPacket[]>(
+        `SELECT COALESCE(SUM(s.price * o.quantity), 0) AS total_revenue,
+                COUNT(*) AS orders_count
+         ${fromSql}`,
+        values,
+      ),
+      query<RowDataPacket[]>(
+        `SELECT s.service_name, SUM(o.quantity) AS quantity
+         ${fromSql}
+         GROUP BY s.service_id, s.service_name
+         ORDER BY quantity DESC, s.service_name
+         LIMIT 1`,
+        values,
+      ),
+    ]);
+
+    return ok({
+      orders,
+      summary: {
+        total_revenue: Number(summaries[0]?.total_revenue ?? 0),
+        orders_count: Number(summaries[0]?.orders_count ?? 0),
+        top_service_name: topServices[0]?.service_name ?? null,
+        top_service_quantity: Number(topServices[0]?.quantity ?? 0),
+      },
+    });
+  } catch (error) {
+    return handleDbError(error);
+  }
+}
+
 export async function deleteServiceOrder(
   _request: Request,
   context: { params: Promise<{ id: string }> },

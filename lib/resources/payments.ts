@@ -65,7 +65,10 @@ export async function createPayment(request: Request) {
         [paymentId],
       );
       const [billRows] = await connection.execute<RowDataPacket[]>(
-        "SELECT booking_id, full_name, room_no, status, room_charge, services_total, grand_total, paid, balance FROM booking_bills WHERE booking_id = ?",
+        `SELECT booking_id, full_name, room_no, status, room_charge,
+                room_gst_rate, room_gst, services_total, services_gst_rate,
+                services_gst, total_gst, grand_total, paid, balance
+         FROM booking_bills WHERE booking_id = ?`,
         [bookingId],
       );
       return {

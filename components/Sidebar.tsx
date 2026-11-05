@@ -23,6 +23,7 @@ const navigation = [
   { label: "Payments", href: "/payments", icon: CreditCard },
   { label: "Employees", href: "/employees", icon: BriefcaseBusiness },
   { label: "Services", href: "/services", icon: Utensils },
+  { label: "Service Orders", href: "/service-orders", icon: ClipboardList },
 ];
 
 export default function Sidebar() {

@@ -28,7 +28,17 @@ export async function getBookingDetail(
         [id],
       ),
       query<RowDataPacket[]>(
-        "SELECT booking_id, full_name, room_no, status, room_charge, services_total, grand_total, paid, balance FROM booking_bills WHERE booking_id = ?",
+        `SELECT bb.booking_id, bb.full_name, bb.room_no, bb.status,
+                bb.room_charge, bb.room_gst_rate, bb.room_gst,
+                bb.services_total, bb.services_gst_rate, bb.services_gst,
+                bb.total_gst, bb.grand_total, bb.paid, bb.balance,
+                DATEDIFF(b.check_out, b.check_in) AS nights,
+                rt.price_per_night AS room_rate
+         FROM booking_bills bb
+         JOIN Bookings b ON b.booking_id = bb.booking_id
+         JOIN Rooms r ON r.room_no = b.room_no
+         JOIN Room_Types rt ON rt.type_id = r.type_id
+         WHERE bb.booking_id = ?`,
         [id],
       ),
       query<RowDataPacket[]>(

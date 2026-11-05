@@ -1,6 +1,7 @@
 import type { RowDataPacket } from "mysql2/promise";
 import { fail, handleDbError, ok } from "@/lib/api";
 import { query } from "@/lib/db";
+import { ROOM_DISPLAY_STATUS_SQL } from "@/lib/roomStatus";
 import {
   idFromParam,
   isRecord,
@@ -13,11 +14,13 @@ import {
 } from "@/lib/validate";
 
 const statuses = ["Available", "Occupied", "Maintenance"] as const;
+const displayStatuses = ["Available", "Reserved", "Occupied", "Maintenance"] as const;
 const manualStatuses = ["Available", "Maintenance"] as const;
 
 const roomSelect =
   `SELECT r.room_no, r.type_id, rt.type_name, rt.price_per_night,
           rt.capacity, r.floor_no, r.status,
+          (${ROOM_DISPLAY_STATUS_SQL}) AS display_status,
           (SELECT b.booking_id FROM Bookings b
            WHERE b.room_no = r.room_no AND b.status = 'Checked-In'
            ORDER BY b.check_in LIMIT 1) AS current_booking_id,
@@ -31,19 +34,59 @@ const roomSelect =
           (SELECT b.booking_id FROM Bookings b
            WHERE b.room_no = r.room_no AND b.status = 'Confirmed'
              AND b.check_out > CURDATE()
+             AND (
+               NOT EXISTS (SELECT 1 FROM Bookings current_booking
+                           WHERE current_booking.room_no = r.room_no
+                             AND current_booking.status = 'Checked-In')
+               OR b.check_in >= (SELECT current_booking.check_out
+                                 FROM Bookings current_booking
+                                 WHERE current_booking.room_no = r.room_no
+                                   AND current_booking.status = 'Checked-In'
+                                 ORDER BY current_booking.check_in LIMIT 1)
+             )
            ORDER BY b.check_in LIMIT 1) AS next_booking_id,
           (SELECT g.full_name FROM Bookings b
            JOIN Guests g ON g.guest_id = b.guest_id
            WHERE b.room_no = r.room_no AND b.status = 'Confirmed'
              AND b.check_out > CURDATE()
+             AND (
+               NOT EXISTS (SELECT 1 FROM Bookings current_booking
+                           WHERE current_booking.room_no = r.room_no
+                             AND current_booking.status = 'Checked-In')
+               OR b.check_in >= (SELECT current_booking.check_out
+                                 FROM Bookings current_booking
+                                 WHERE current_booking.room_no = r.room_no
+                                   AND current_booking.status = 'Checked-In'
+                                 ORDER BY current_booking.check_in LIMIT 1)
+             )
            ORDER BY b.check_in LIMIT 1) AS next_guest,
           (SELECT b.check_in FROM Bookings b
            WHERE b.room_no = r.room_no AND b.status = 'Confirmed'
              AND b.check_out > CURDATE()
+             AND (
+               NOT EXISTS (SELECT 1 FROM Bookings current_booking
+                           WHERE current_booking.room_no = r.room_no
+                             AND current_booking.status = 'Checked-In')
+               OR b.check_in >= (SELECT current_booking.check_out
+                                 FROM Bookings current_booking
+                                 WHERE current_booking.room_no = r.room_no
+                                   AND current_booking.status = 'Checked-In'
+                                 ORDER BY current_booking.check_in LIMIT 1)
+             )
            ORDER BY b.check_in LIMIT 1) AS next_check_in,
           (SELECT b.check_out FROM Bookings b
            WHERE b.room_no = r.room_no AND b.status = 'Confirmed'
              AND b.check_out > CURDATE()
+             AND (
+               NOT EXISTS (SELECT 1 FROM Bookings current_booking
+                           WHERE current_booking.room_no = r.room_no
+                             AND current_booking.status = 'Checked-In')
+               OR b.check_in >= (SELECT current_booking.check_out
+                                 FROM Bookings current_booking
+                                 WHERE current_booking.room_no = r.room_no
+                                   AND current_booking.status = 'Checked-In'
+                                 ORDER BY current_booking.check_in LIMIT 1)
+             )
            ORDER BY b.check_in LIMIT 1) AS next_check_out
    FROM Rooms r JOIN Room_Types rt ON rt.type_id = r.type_id`;
 
@@ -111,17 +154,16 @@ export async function listRooms(request: Request) {
   const search = params.get("search")?.trim() ?? "";
   const status = params.get("status")?.trim() ?? "";
   const rawTypeId = params.get("type_id")?.trim() ?? "";
-  const bookingInfo = params.get("booking_info")?.trim() ?? "";
   const availabilityOn = params.get("availability_on")?.trim() ?? "";
   const filters: string[] = [];
   const values: (string | number)[] = [];
   const validation: string[] = [];
 
   if (status) {
-    const statusError = oneOf(status, statuses, "Status");
+    const statusError = oneOf(status, displayStatuses, "Status");
     if (statusError) validation.push(statusError);
     else {
-      filters.push("r.status = ?");
+      filters.push(`(${ROOM_DISPLAY_STATUS_SQL}) = ?`);
       values.push(status);
     }
   }
@@ -131,18 +173,6 @@ export async function listRooms(request: Request) {
     else {
       filters.push("r.type_id = ?");
       values.push(Number(rawTypeId));
-    }
-  }
-  if (bookingInfo) {
-    const choices = ["Free now", "Reserved", "Occupied"];
-    const bookingInfoError = oneOf(bookingInfo, choices, "Booking info");
-    if (bookingInfoError) validation.push(bookingInfoError);
-    else if (bookingInfo === "Free now") {
-      filters.push("r.status = 'Available' AND NOT EXISTS (SELECT 1 FROM Bookings bx WHERE bx.room_no = r.room_no AND bx.status = 'Checked-In')");
-    } else if (bookingInfo === "Reserved") {
-      filters.push("EXISTS (SELECT 1 FROM Bookings bx WHERE bx.room_no = r.room_no AND bx.status = 'Confirmed' AND bx.check_out > CURDATE())");
-    } else {
-      filters.push("EXISTS (SELECT 1 FROM Bookings bx WHERE bx.room_no = r.room_no AND bx.status = 'Checked-In')");
     }
   }
   if (availabilityOn) {

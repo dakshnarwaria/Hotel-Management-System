@@ -3,7 +3,7 @@ import { Check, Wrench } from "lucide-react";
 import Button from "@/components/Button";
 import Link from "next/link";
 import StatusBadge from "@/components/StatusBadge";
-import { floorLabel, formatCurrency, formatDate } from "@/lib/format";
+import { floorLabel, formatCurrency, formatShortDate } from "@/lib/format";
 import {
   isEmail,
   isPhone,
@@ -154,20 +154,11 @@ export const masterDataConfigs: Record<string, ResourceConfig> = {
         name: "status",
         label: "Status",
         options: [
-          { value: "", label: "All statuses" },
+          { value: "", label: "All" },
           { value: "Available", label: "Available" },
-          { value: "Occupied", label: "Occupied" },
-          { value: "Maintenance", label: "Maintenance" },
-        ],
-      },
-      {
-        name: "booking_info",
-        label: "Booking info",
-        options: [
-          { value: "", label: "All booking info" },
-          { value: "Free now", label: "Free now" },
           { value: "Reserved", label: "Reserved" },
           { value: "Occupied", label: "Occupied" },
+          { value: "Maintenance", label: "Maintenance" },
         ],
       },
     ],
@@ -181,20 +172,16 @@ export const masterDataConfigs: Record<string, ResourceConfig> = {
         key: "status",
         header: "Status",
         render: (row) => {
-          const current = row.availability_on_status
-            ? String(row.availability_on_status)
-            : String(row.status);
-          const guest = row.availability_on_guest
-            ? ` · ${String(row.availability_on_guest)}`
-            : "";
           return (
             <span className="room-status-cell">
-              <StatusBadge status={current} />
-              {row.status === "Available" && row.next_booking_id != null && (
-                <StatusBadge status="Reserved" />
-              )}
-              {current === "Booked" && guest && (
-                <small className="muted">{guest}</small>
+              <StatusBadge status={String(row.display_status)} />
+              {row.availability_on_status != null && (
+                <small className="muted">
+                  On selected date: {String(row.availability_on_status)}
+                  {row.availability_on_guest
+                    ? ` · ${String(row.availability_on_guest)}`
+                    : ""}
+                </small>
               )}
             </span>
           );
@@ -204,67 +191,69 @@ export const masterDataConfigs: Record<string, ResourceConfig> = {
         key: "booking",
         header: "Booking",
         sortable: false,
-        render: (row) => (
-          <span className="room-booking-cell">
-            {row.current_booking_id != null && (
-              <span>
+        render: (row) => {
+          const occupied = row.current_booking_id != null;
+          const next = row.next_booking_id != null;
+          return (
+            <span className="room-booking-cell">
+              {occupied && (
                 <Link href={`/bookings/${row.current_booking_id}`}>
-                  Occupied until {formatDate(row.current_check_out as string)} -{" "}
+                  Until {formatShortDate(row.current_check_out as string)} -{" "}
                   {String(row.current_guest)}
                 </Link>
-              </span>
-            )}
-            {row.next_booking_id != null && (
-              <span>
-                <Link href={`/bookings/${row.next_booking_id}`}>
-                  Reserved {formatDate(row.next_check_in as string)} to{" "}
-                  {formatDate(row.next_check_out as string)} -{" "}
+              )}
+              {next && (
+                <Link
+                  className={occupied ? "muted" : undefined}
+                  href={`/bookings/${row.next_booking_id}`}
+                >
+                  {occupied ? "Next: " : ""}
+                  {formatShortDate(row.next_check_in as string)} to{" "}
+                  {formatShortDate(row.next_check_out as string)} -{" "}
                   {String(row.next_guest)}
                 </Link>
-              </span>
-            )}
-            {row.current_booking_id == null && row.next_booking_id == null && (
-              <span className="muted">-</span>
-            )}
-          </span>
-        ),
+              )}
+              {!occupied && !next && <span className="muted">-</span>}
+            </span>
+          );
+        },
       },
     ],
     extraAction: (row, onToggle, loading) => {
-      const occupied = row.status === "Occupied";
-      const reserved = row.next_booking_id != null;
+      const occupied = row.display_status === "Occupied";
+      const reserved = row.display_status === "Reserved";
       const nextStatus =
         row.status === "Available" ? "Maintenance" : "Available";
+      const statusTitle = occupied
+        ? "Room status is managed automatically while a guest is checked in"
+        : reserved
+          ? "Room has upcoming bookings and its status cannot be changed"
+          : `Mark ${nextStatus.toLowerCase()}`;
       return (
-        <Button
-          key="room-status"
-          variant="secondary"
-          size="sm"
-          loading={loading}
-          disabled={occupied || (reserved && row.status === "Available")}
-          title={
-            occupied
-              ? "Room status is managed automatically while a guest is checked in"
-              : reserved && row.status === "Available"
-                ? "Room has upcoming bookings and cannot be set to Maintenance"
-              : `Mark ${nextStatus.toLowerCase()}`
-          }
-          aria-label={
-            occupied
-              ? "Room status cannot be changed while occupied"
-              : reserved && row.status === "Available"
-                ? "Room is reserved and cannot be set to Maintenance"
-              : `Mark room ${nextStatus.toLowerCase()}`
-          }
-          onClick={() => onToggle(row)}
-        >
-          {nextStatus === "Maintenance" ? (
-            <Wrench size={14} aria-hidden />
-          ) : (
-            <Check size={14} aria-hidden />
-          )}
-          {nextStatus}
-        </Button>
+        <span key="room-status" title={statusTitle}>
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={loading}
+            disabled={occupied || reserved}
+            title={statusTitle}
+            aria-label={
+              occupied
+                ? "Room status cannot be changed while occupied"
+                : reserved
+                  ? "Room is reserved and its status cannot be changed"
+                  : `Mark room ${nextStatus.toLowerCase()}`
+            }
+            onClick={() => onToggle(row)}
+          >
+            {nextStatus === "Maintenance" ? (
+              <Wrench size={14} aria-hidden />
+            ) : (
+              <Check size={14} aria-hidden />
+            )}
+            {nextStatus}
+          </Button>
+        </span>
       );
     },
     validate: (values, editing) =>

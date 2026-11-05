@@ -72,6 +72,9 @@ export default function ResourcePage({ resource }: { resource: string }) {
         for (const [key, value] of Object.entries(filters)) {
           if (value) params.set(key, value);
         }
+        if (resource === "rooms" && availabilityOn) {
+          params.set("availability_on", availabilityOn);
+        }
         const queryString = params.size ? `?${params.toString()}` : "";
         const data = await request<Row[]>(`${config.endpoint}${queryString}`);
         if (active) setRows(data);
@@ -85,7 +88,7 @@ export default function ResourcePage({ resource }: { resource: string }) {
     return () => {
       active = false;
     };
-  }, [config.endpoint, filters, request, search]);
+  }, [availabilityOn, config.endpoint, filters, request, resource, search]);
 
   useEffect(() => {
     if (!config.roomOptions) return;
@@ -203,7 +206,11 @@ export default function ResourcePage({ resource }: { resource: string }) {
 
   async function toggleRoomStatus(row: Row) {
     const roomNo = Number(row.room_no);
-    if (!Number.isSafeInteger(roomNo) || row.status === "Occupied") return;
+    if (
+      !Number.isSafeInteger(roomNo) ||
+      row.display_status === "Occupied" ||
+      row.display_status === "Reserved"
+    ) return;
     setQuickStatusLoading(roomNo);
     try {
       const status = row.status === "Available" ? "Maintenance" : "Available";

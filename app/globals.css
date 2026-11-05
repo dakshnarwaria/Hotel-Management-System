@@ -18,6 +18,8 @@
   --status-occupied-text: #9a552b;
   --status-maintenance-bg: #e8e1d8;
   --status-maintenance-text: #76695a;
+  --status-reserved-bg: color-mix(in srgb, var(--accent) 15%, var(--background));
+  --status-reserved-text: color-mix(in srgb, var(--accent) 82%, var(--foreground));
 }
 
 @theme inline {
@@ -519,6 +521,24 @@ a {
 .status-maintenance {
   background: var(--status-maintenance-bg);
   color: var(--status-maintenance-text);
+}
+
+.status-reserved {
+  background: var(--status-reserved-bg);
+  color: var(--status-reserved-text);
+}
+
+.room-status-cell,
+.room-booking-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.room-booking-cell a:hover {
+  color: var(--accent);
+  text-decoration: underline;
 }
 
 .form-field {
@@ -1166,6 +1186,10 @@ a {
   font-weight: 700;
 }
 
+.final-bill .bill-balance.bill-due dd {
+  color: var(--accent);
+}
+
 .balance-warning {
   margin-top: 1.15rem;
   border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
@@ -1339,6 +1363,46 @@ a {
   background: color-mix(in srgb, var(--accent) 7%, var(--background));
 }
 
+.line-total-preview > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.line-total-preview {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.line-total-preview > div:last-child {
+  border-top: 1px solid var(--border);
+  padding-top: 0.65rem;
+  font-weight: 700;
+}
+
+.service-empty-state {
+  display: grid;
+  justify-items: start;
+  gap: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  padding: 1rem;
+  background: color-mix(in srgb, var(--accent) 5%, var(--background));
+  color: var(--foreground);
+}
+
+.service-empty-state p {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.bill-gst-note {
+  margin: 1rem 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
 .payment-balance-banner strong,
 .line-total-preview strong {
   color: var(--accent);
@@ -1391,6 +1455,10 @@ a {
   margin-bottom: 1.25rem;
 }
 
+.service-summary-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .payment-summary-card {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -1399,6 +1467,10 @@ a {
   padding: 1rem;
   color: var(--muted);
   font-size: 0.82rem;
+}
+
+.payment-summary-card small {
+  grid-column: 2;
 }
 
 .payment-summary-card strong {
@@ -1446,8 +1518,8 @@ a {
 }
 
 .status-reserved {
-  background: color-mix(in srgb, #a9713a 14%, var(--background));
-  color: var(--accent);
+  background: var(--status-reserved-bg);
+  color: var(--status-reserved-text);
 }
 
 .status-paid-in-full,

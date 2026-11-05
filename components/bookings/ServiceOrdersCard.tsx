@@ -64,11 +64,21 @@ export default function ServiceOrdersCard({
             <span className="eyebrow">Booking #{bookingId}</span>
             <h2>Service orders</h2>
           </div>
-          {status === "Checked-In" && (
-            <Button size="sm" onClick={onAdd}>
-              <Plus size={15} /> Add service
+          <span
+            title={
+              status === "Checked-In"
+                ? "Record a service during this stay"
+                : "Check the guest in first. Services can only be added during the stay."
+            }
+          >
+            <Button
+              size="sm"
+              disabled={status !== "Checked-In"}
+              onClick={onAdd}
+            >
+              <Plus size={15} /> Record service
             </Button>
-          )}
+          </span>
         </header>
         <div className="detail-table-scroll">
           <table className="data-table detail-table">

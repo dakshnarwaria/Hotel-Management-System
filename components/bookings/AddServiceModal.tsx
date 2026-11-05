@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import Button from "@/components/Button";
 import { FormField, SelectField } from "@/components/FormField";
 import Modal from "@/components/Modal";
@@ -9,11 +10,18 @@ import { formatCurrency } from "@/lib/format";
 import { positiveInt } from "@/lib/validate";
 
 type ServiceOption = { service_id: number; service_name: string; price: number };
+type BookingOption = {
+  booking_id: number;
+  full_name: string;
+  room_no: number;
+  check_in: string | Date;
+  check_out: string | Date;
+};
 type Props = {
   open: boolean;
-  bookingId: number;
-  checkIn: string | Date;
-  checkOut: string | Date;
+  bookingId?: number;
+  checkIn?: string | Date;
+  checkOut?: string | Date;
   onClose: () => void;
   onAdded: () => void;
 };
@@ -38,28 +46,64 @@ export default function AddServiceModal({
 }: Props) {
   const request = useApi();
   const [services, setServices] = useState<ServiceOption[]>([]);
+  const [bookings, setBookings] = useState<BookingOption[]>([]);
+  const [selectedId, setSelectedId] = useState("");
   const [serviceId, setServiceId] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [orderDate, setOrderDate] = useState(todayValue);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [loadingOptions, setLoadingOptions] = useState(false);
+  const [optionsFailed, setOptionsFailed] = useState(false);
+  const fixedBooking = bookingId !== undefined;
 
   useEffect(() => {
     if (!open) return;
     let active = true;
-    async function loadServices() {
+    async function loadOptions() {
+      setLoadingOptions(true);
+      setOptionsFailed(false);
       try {
-        const rows = await request<ServiceOption[]>("/api/services");
-        if (active) setServices(rows);
+        const [serviceRows, bookingResult] = await Promise.all([
+          request<ServiceOption[]>("/api/services"),
+          fixedBooking
+            ? Promise.resolve(null)
+            : request<{ bookings: BookingOption[] }>("/api/bookings?status=Checked-In"),
+        ]);
+        if (!active) return;
+        setServices(serviceRows);
+        const checkedIn = bookingResult?.bookings ?? [];
+        setBookings(checkedIn);
+        setSelectedId(
+          fixedBooking
+            ? String(bookingId)
+            : (current) =>
+                checkedIn.some((booking) => String(booking.booking_id) === current)
+                  ? current
+                  : String(checkedIn[0]?.booking_id ?? ""),
+        );
+        setOrderDate(todayValue());
       } catch {
-        // useApi displays request errors as toasts.
+        if (active) setOptionsFailed(true);
+      } finally {
+        if (active) setLoadingOptions(false);
       }
     }
-    void loadServices();
+    void loadOptions();
     return () => {
       active = false;
     };
-  }, [open, request]);
+  }, [bookingId, fixedBooking, open, request]);
+
+  const activeBooking = fixedBooking
+    ? null
+    : bookings.find((booking) => String(booking.booking_id) === selectedId);
+  const currentCheckIn = fixedBooking
+    ? checkIn
+    : activeBooking?.check_in;
+  const currentCheckOut = fixedBooking
+    ? checkOut
+    : activeBooking?.check_out;
 
   const selectedService = services.find(
     (service) => String(service.service_id) === serviceId,
@@ -68,15 +112,21 @@ export default function AddServiceModal({
     () => Number(selectedService?.price ?? 0) * Number(quantity || 0),
     [quantity, selectedService],
   );
+  const gst = lineTotal * 0.18;
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextErrors: Record<string, string> = {};
+    if (!fixedBooking && !selectedId) nextErrors.booking_id = "Booking is required";
     if (!serviceId) nextErrors.service_id = "Service is required";
     const quantityError = positiveInt(quantity, "Quantity");
     if (quantityError) nextErrors.quantity = quantityError;
     if (!orderDate) nextErrors.order_date = "Order date is required";
-    else if (orderDate < dateValue(checkIn) || orderDate > dateValue(checkOut)) {
+    else if (
+      currentCheckIn &&
+      currentCheckOut &&
+      (orderDate < dateValue(currentCheckIn) || orderDate > dateValue(currentCheckOut))
+    ) {
       nextErrors.order_date = "Order date must be between check-in and check-out dates";
     }
     setErrors(nextErrors);
@@ -89,7 +139,7 @@ export default function AddServiceModal({
         {
           method: "POST",
           body: JSON.stringify({
-            booking_id: bookingId,
+            booking_id: fixedBooking ? Number(bookingId) : Number(selectedId),
             service_id: Number(serviceId),
             quantity: Number(quantity),
             order_date: orderDate,
@@ -106,9 +156,45 @@ export default function AddServiceModal({
     }
   }
 
+  if (!fixedBooking && !loadingOptions && !optionsFailed && bookings.length === 0) {
+    return (
+      <Modal open={open} title="Record service" onClose={() => !saving && onClose()}>
+        <div className="service-empty-state">
+          <p>No guests are checked in right now. Check a guest in from the Bookings page first.</p>
+          <Link className="button button-primary button-sm" href="/bookings">
+            Go to Bookings
+          </Link>
+        </div>
+      </Modal>
+    );
+  }
+
   return (
-    <Modal open={open} title="Add service" onClose={() => !saving && onClose()}>
+    <Modal open={open} title="Record service" onClose={() => !saving && onClose()}>
+      {loadingOptions ? (
+        <p className="muted">Loading checked-in bookings and services…</p>
+      ) : optionsFailed ? (
+        <p className="form-error">Could not load bookings or services. Close and reopen this dialog to try again.</p>
+      ) : (
       <form className="resource-form" onSubmit={(event) => void submit(event)} noValidate>
+        {!fixedBooking && (
+          <SelectField
+            name="booking_id"
+            label="Booking"
+            required
+            value={selectedId}
+            error={errors.booking_id}
+            options={[
+              { value: "", label: "Select a checked-in booking" },
+              ...bookings.map((booking) => ({
+                value: String(booking.booking_id),
+                label: `#${booking.booking_id} · ${booking.full_name} · Room ${booking.room_no}`,
+              })),
+            ]}
+            disabled={saving}
+            onChange={(event) => setSelectedId(event.target.value)}
+          />
+        )}
         <SelectField
           name="service_id"
           label="Service"
@@ -122,7 +208,7 @@ export default function AddServiceModal({
               label: `${service.service_name} · ${formatCurrency(service.price)}`,
             })),
           ]}
-          disabled={saving}
+          disabled={saving || services.length === 0}
           onChange={(event) => setServiceId(event.target.value)}
         />
         <FormField
@@ -142,22 +228,24 @@ export default function AddServiceModal({
           label="Order date"
           type="date"
           required
-          min={dateValue(checkIn)}
-          max={dateValue(checkOut)}
+          min={currentCheckIn ? dateValue(currentCheckIn) : undefined}
+          max={currentCheckOut ? dateValue(currentCheckOut) : undefined}
           value={orderDate}
           error={errors.order_date}
           disabled={saving}
           onChange={(event) => setOrderDate(event.target.value)}
         />
         <div className="line-total-preview">
-          <span>Line total</span>
-          <strong>{formatCurrency(lineTotal)}</strong>
+          <div><span>Line total before GST</span><strong>{formatCurrency(lineTotal)}</strong></div>
+          <div><span>GST (18%)</span><strong>{formatCurrency(gst)}</strong></div>
+          <div><span>Total including GST</span><strong>{formatCurrency(lineTotal + gst)}</strong></div>
         </div>
         <div className="form-actions">
           <Button type="button" variant="secondary" disabled={saving} onClick={onClose}>Cancel</Button>
-          <Button type="submit" loading={saving}>Add service</Button>
+          <Button type="submit" loading={saving}>Record service</Button>
         </div>
       </form>
+      )}
     </Modal>
   );
 }

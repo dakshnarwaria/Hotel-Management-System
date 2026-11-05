@@ -23,6 +23,7 @@ export interface Room {
   capacity: number;
   floor_no: number;
   status: "Available" | "Occupied" | "Maintenance";
+  display_status: "Available" | "Reserved" | "Occupied" | "Maintenance";
 }
 
 export interface Employee {
@@ -53,10 +54,16 @@ export interface Booking {
   check_in: string | Date;
   check_out: string | Date;
   nights: number;
+  room_rate: number;
   no_of_guests: number;
   status: "Confirmed" | "Checked-In" | "Checked-Out" | "Cancelled";
   room_charge: number;
+  room_gst_rate: number;
+  room_gst: number;
   services_total: number;
+  services_gst_rate: number;
+  services_gst: number;
+  total_gst: number;
   grand_total: number;
   paid: number;
   balance: number;

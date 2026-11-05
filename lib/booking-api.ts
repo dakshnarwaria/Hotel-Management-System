@@ -6,8 +6,11 @@ import { positiveInt } from "@/lib/validate";
 export const bookingSelect = `
   SELECT b.booking_id, b.guest_id, g.full_name, g.phone, b.room_no,
          rt.type_name, b.emp_id, e.emp_name, b.check_in, b.check_out,
-         DATEDIFF(b.check_out, b.check_in) AS nights, b.no_of_guests,
-         b.status, bb.room_charge, bb.services_total, bb.grand_total,
+         DATEDIFF(b.check_out, b.check_in) AS nights,
+         rt.price_per_night AS room_rate, b.no_of_guests,
+         b.status, bb.room_charge, bb.room_gst_rate, bb.room_gst,
+         bb.services_total, bb.services_gst_rate, bb.services_gst,
+         bb.total_gst, bb.grand_total,
          bb.paid, bb.balance
   FROM Bookings b
   JOIN Guests g ON g.guest_id = b.guest_id
@@ -242,11 +245,22 @@ export async function bookingAction(
         }
         await connection.query("CALL check_in(?)", [id]);
       } else if (action === "check_out") {
-        const [rows] = await connection.query<RowDataPacket[][]>(
-          "CALL check_out(?)",
+        await connection.query("CALL check_out(?)", [id]);
+        const [billRows] = await connection.execute<RowDataPacket[]>(
+          `SELECT bb.booking_id, bb.full_name, bb.room_no, bb.status,
+                  bb.room_charge, bb.room_gst_rate, bb.room_gst,
+                  bb.services_total, bb.services_gst_rate, bb.services_gst,
+                  bb.total_gst, bb.grand_total, bb.paid, bb.balance,
+                  DATEDIFF(b.check_out, b.check_in) AS nights,
+                  rt.price_per_night AS room_rate
+           FROM booking_bills bb
+           JOIN Bookings b ON b.booking_id = bb.booking_id
+           JOIN Rooms r ON r.room_no = b.room_no
+           JOIN Room_Types rt ON rt.type_id = r.type_id
+           WHERE bb.booking_id = ?`,
           [id],
         );
-        return { bill: rows[0]?.[0] ?? null } as const;
+        return { bill: billRows[0] ?? null } as const;
       } else {
         await connection.query("CALL cancel_booking(?)", [id]);
       }

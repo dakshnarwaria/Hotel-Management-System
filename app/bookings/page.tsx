@@ -7,8 +7,9 @@ import Button from "@/components/Button";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import DataTable from "@/components/DataTable";
 import { FormField } from "@/components/FormField";
-import Modal from "@/components/Modal";
 import NewBookingModal from "@/components/bookings/NewBookingModal";
+import FinalBillModal from "@/components/bookings/FinalBillModal";
+import type { BillData } from "@/components/bookings/BillSummary";
 import PageHeader from "@/components/PageHeader";
 import SearchInput from "@/components/SearchInput";
 import StatusBadge from "@/components/StatusBadge";
@@ -18,18 +19,6 @@ import type { Booking } from "@/lib/types";
 
 type Counts = Record<"All" | Booking["status"], number>;
 type BookingList = { bookings: Booking[]; counts: Counts };
-type Bill = {
-  booking_id: number;
-  full_name: string;
-  room_no: number;
-  status: string;
-  room_charge: number;
-  services_total: number;
-  grand_total: number;
-  paid: number;
-  balance: number;
-};
-
 const tabs: { label: keyof Counts; status: string }[] = [
   { label: "All", status: "" },
   { label: "Confirmed", status: "Confirmed" },
@@ -67,7 +56,7 @@ export default function BookingsPage() {
   const [cancelTarget, setCancelTarget] = useState<Booking | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
-  const [finalBill, setFinalBill] = useState<Bill | null>(null);
+  const [finalBill, setFinalBill] = useState<BillData | null>(null);
 
   const searchChanged = useCallback((value: string) => {
     setHasLoaded(false);
@@ -144,7 +133,7 @@ export default function BookingsPage() {
   async function checkOut(booking: Booking) {
     setActionLoading(booking.booking_id);
     try {
-      const bill = await request<Bill>(
+      const bill = await request<BillData>(
         `/api/bookings/${booking.booking_id}/check-out`,
         { method: "POST" },
         `Booking #${booking.booking_id} checked out`,
@@ -226,7 +215,7 @@ export default function BookingsPage() {
       },
       {
         key: "balance",
-        header: "Balance",
+        header: "Remaining",
         render: (row: Booking) => (
           <strong className={row.balance > 0 ? "balance-due" : ""}>
             {formatCurrency(row.balance)}
@@ -367,39 +356,7 @@ export default function BookingsPage() {
         onConfirm={() => void cancelBooking()}
       />
 
-      <Modal
-        open={Boolean(finalBill)}
-        title="Final Bill"
-        onClose={() => setFinalBill(null)}
-      >
-        {finalBill && (
-          <div className="final-bill">
-            <div className="final-bill-intro">
-              <span className="eyebrow">Booking #{finalBill.booking_id}</span>
-              <strong>{finalBill.full_name}</strong>
-              <span>Room {finalBill.room_no}</span>
-            </div>
-            <dl>
-              <div><dt>Room charge</dt><dd>{formatCurrency(finalBill.room_charge)}</dd></div>
-              <div><dt>Services total</dt><dd>{formatCurrency(finalBill.services_total)}</dd></div>
-              <div className="bill-grand"><dt>Grand total</dt><dd>{formatCurrency(finalBill.grand_total)}</dd></div>
-              <div><dt>Paid</dt><dd>{formatCurrency(finalBill.paid)}</dd></div>
-              <div className="bill-balance"><dt>Balance</dt><dd>{formatCurrency(finalBill.balance)}</dd></div>
-            </dl>
-            {finalBill.balance > 0 && (
-              <div className="balance-warning" role="status">
-                <span>Balance due: {formatCurrency(finalBill.balance)}.</span>
-                <Link
-                  href={`/bookings/${finalBill.booking_id}`}
-                  className="button button-primary button-sm"
-                >
-                  Record payment
-                </Link>
-              </div>
-            )}
-          </div>
-        )}
-      </Modal>
+      <FinalBillModal bill={finalBill} onClose={() => setFinalBill(null)} />
 
       <NewBookingModal
         open={newBookingOpen}
