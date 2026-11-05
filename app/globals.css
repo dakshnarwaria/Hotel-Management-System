@@ -2209,6 +2209,16 @@ a {
 }
 
 @media print {
+  @page hotel-report {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  @page hotel-report-landscape {
+    size: A4 landscape;
+    margin: 12mm;
+  }
+
   :root,
   :root.dark {
     color-scheme: light;
@@ -2263,8 +2273,101 @@ a {
   }
 
   .report-print-heading h1,
+  .report-print-heading h2,
   .report-print-heading p {
     margin: 0.25rem 0;
+  }
+
+  .reports-page {
+    page: hotel-report;
+  }
+
+  .reports-page.print-landscape {
+    page: hotel-report-landscape;
+  }
+
+  body:has(.reports-page) .toast-region {
+    display: none !important;
+  }
+
+  .reports-page .report-detail-card,
+  .reports-page .reports-result,
+  .reports-page {
+    color: #111 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+
+  .reports-page .report-detail-card,
+  .reports-page .reports-result,
+  .reports-page .printable-table {
+    break-inside: auto;
+  }
+
+  .reports-page .report-title-row,
+  .reports-page .report-sql,
+  .reports-page .report-row-count {
+    display: none !important;
+  }
+
+  .reports-page .table-card {
+    display: none !important;
+  }
+
+  .reports-page .printable-table-container {
+    display: block !important;
+  }
+
+  .reports-page .printable-table {
+    display: block !important;
+    width: 100%;
+    overflow: visible;
+    color: #111 !important;
+    background: #fff !important;
+  }
+
+  .reports-page .printable-table table {
+    width: 100%;
+    table-layout: auto;
+    border-collapse: collapse;
+    color: #111 !important;
+    background: #fff !important;
+    font-size: 11px;
+  }
+
+  .reports-page .printable-table thead {
+    display: table-header-group;
+  }
+
+  .reports-page .printable-table tr {
+    break-inside: avoid;
+    background: #fff !important;
+  }
+
+  .reports-page .printable-table th,
+  .reports-page .printable-table td {
+    border: 1px solid #888;
+    padding: 4px 6px;
+    color: #111 !important;
+    background: #fff !important;
+    font-size: 11px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .reports-page .printable-table .status-badge {
+    border: 0;
+    padding: 0;
+    background: transparent !important;
+    color: #111 !important;
+    font-size: inherit;
+    font-weight: 400;
+  }
+
+  .reports-page .printable-empty {
+    padding: 1rem;
+    text-align: center;
   }
 
   .detail-grid {

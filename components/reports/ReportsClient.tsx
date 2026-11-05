@@ -7,6 +7,7 @@ import Button from "@/components/Button";
 import DataTable, { type DataColumn } from "@/components/DataTable";
 import ErrorCard from "@/components/ErrorCard";
 import PageHeader from "@/components/PageHeader";
+import PrintableTable from "@/components/reports/PrintableTable";
 import StatusBadge from "@/components/StatusBadge";
 import { useToast } from "@/components/Toast";
 import { useList } from "@/hooks/useList";
@@ -25,6 +26,8 @@ export default function ReportsClient({
   const { toast } = useToast();
   const [selectedId, setSelectedId] = useState(initialReport);
   const [sqlOpen, setSqlOpen] = useState(false);
+  const [printRows, setPrintRows] = useState<ReportRow[]>([]);
+  const [printedAt, setPrintedAt] = useState(() => new Date());
   const {
     rows,
     summary,
@@ -92,12 +95,26 @@ export default function ReportsClient({
   }
 
   const reportCount = summary?.rowCount ?? rows.length;
+  const onSortedRowsChange = useCallback((sortedRows: ReportRow[]) => {
+    setPrintRows(sortedRows);
+  }, []);
+
+  function printReport() {
+    if (loading || !report) return;
+    setPrintedAt(new Date());
+    window.setTimeout(() => window.print(), 0);
+  }
 
   return (
-    <div className="reports-page">
+    <div
+      className={`reports-page${(report?.columns.length ?? 0) >= 7 ? " print-landscape" : ""}`}
+    >
       <PageHeader eyebrow="Insights" title="Reports" />
       <div className="reports-layout">
-        <aside className="reports-sidebar surface" aria-label="Available reports">
+        <aside
+          className="reports-sidebar surface print:hidden"
+          aria-label="Available reports"
+        >
           <div className="reports-list-heading">
             <h2>Lab reports</h2>
             <span>{reports.length}</span>
@@ -132,12 +149,21 @@ export default function ReportsClient({
         <section className="reports-result">
           {report ? (
             <>
-              <div className="report-print-heading">
-                <h1>{report.title}</h1>
-                <p>{formatDate(new Date())}</p>
+              <div className="report-print-heading hidden print:block">
+                <h1>Hearth &amp; Stay</h1>
+                <h2>Report {report.id}: {report.title}</h2>
+                <p>{report.description}</p>
+                <p>{rows.length} rows</p>
+                <p>
+                  Printed{" "}
+                  {new Intl.DateTimeFormat("en-IN", {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  }).format(printedAt)}
+                </p>
               </div>
               <div className="surface report-detail-card">
-                <div className="report-title-row">
+                <div className="report-title-row print:hidden">
                   <div>
                     <span className="eyebrow">Report {report.id}</span>
                     <h2>{report.title}</h2>
@@ -147,7 +173,11 @@ export default function ReportsClient({
                     <Button variant="secondary" onClick={exportCsv} disabled={loading}>
                       <Download size={15} /> Export CSV
                     </Button>
-                    <Button variant="secondary" onClick={() => window.print()}>
+                    <Button
+                      variant="secondary"
+                      onClick={printReport}
+                      disabled={loading || !report}
+                    >
                       <Printer size={15} /> Print
                     </Button>
                   </div>
@@ -172,19 +202,34 @@ export default function ReportsClient({
                     </pre>
                   )}
                 </div>
-                {error && <ErrorCard message={error} onRetry={refresh} />}
-                <div className="report-row-count">
+                {error && (
+                  <div className="print:hidden">
+                    <ErrorCard message={error} onRetry={refresh} />
+                  </div>
+                )}
+                <div className="report-row-count print:hidden">
                   <span>{reportCount} rows</span>
                 </div>
                 <DataTable
                   columns={columns}
                   rows={rows}
                   loading={loading}
+                  onSortedRowsChange={onSortedRowsChange}
+                  className="print:hidden"
                   emptyMessage="This report returned no rows. Try another report."
                   rowKey={(row, index) =>
                     String(row.booking_id ?? row.guest_id ?? row.order_id ?? row.payment_id ?? row.room_no ?? index)
                   }
                 />
+                <div className="printable-table-container hidden print:block">
+                  <PrintableTable
+                    columns={columns}
+                    rows={printRows}
+                    rowKey={(row, index) =>
+                      String(row.booking_id ?? row.guest_id ?? row.order_id ?? row.payment_id ?? row.room_no ?? index)
+                    }
+                  />
+                </div>
               </div>
             </>
           ) : (

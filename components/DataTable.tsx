@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import Button from "@/components/Button";
 
@@ -18,6 +18,8 @@ type Props<T> = {
   emptyMessage?: string;
   actions?: (row: T) => ReactNode;
   rowKey?: (row: T, index: number) => string | number;
+  onSortedRowsChange?: (rows: T[]) => void;
+  className?: string;
 };
 
 export default function DataTable<T>({
@@ -27,6 +29,8 @@ export default function DataTable<T>({
   emptyMessage = "Nothing to show yet.",
   actions,
   rowKey,
+  onSortedRowsChange,
+  className,
 }: Props<T>) {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
@@ -50,6 +54,10 @@ export default function DataTable<T>({
     });
   }, [columns, rows, sortDirection, sortKey]);
 
+  useEffect(() => {
+    onSortedRowsChange?.(sortedRows);
+  }, [onSortedRowsChange, sortedRows]);
+
   const pageCount = Math.max(1, Math.ceil(sortedRows.length / 10));
   const currentPage = Math.min(page, pageCount - 1);
   const start = currentPage * 10;
@@ -68,7 +76,7 @@ export default function DataTable<T>({
   }
 
   return (
-    <div className="table-card surface">
+    <div className={`table-card surface${className ? ` ${className}` : ""}`}>
       <div className="table-scroll">
         <table className="data-table">
           <thead>
