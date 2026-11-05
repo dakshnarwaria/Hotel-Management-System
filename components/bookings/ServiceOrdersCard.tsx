@@ -50,7 +50,6 @@ export default function ServiceOrdersCard({
       setDeleteTarget(null);
       onChanged();
     } catch {
-      // useApi displays request errors as toasts.
     } finally {
       setDeleting(false);
     }
@@ -96,7 +95,7 @@ export default function ServiceOrdersCard({
               {orders.length === 0 ? (
                 <tr>
                   <td colSpan={status === "Checked-In" ? 6 : 5} className="empty-cell">
-                    No services ordered.
+                    No services ordered yet. Add one while the guest is checked in.
                   </td>
                 </tr>
               ) : (

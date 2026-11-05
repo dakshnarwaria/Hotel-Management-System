@@ -25,6 +25,9 @@ export default function RoomStatusDonut({
   return (
     <section className="surface dashboard-card">
       <h2 className="dashboard-card-title">Room status</h2>
+      {rooms.total === 0 && (
+        <p className="chart-empty">No rooms yet. Add rooms to see their status.</p>
+      )}
       <div className="donut-layout">
         <div className="chart-frame donut-frame">
           <ResponsiveContainer width="100%" height={220}>

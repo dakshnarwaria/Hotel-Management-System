@@ -42,7 +42,7 @@ export default function PaymentsCard({
           </thead>
           <tbody>
             {payments.length === 0 ? (
-              <tr><td colSpan={3} className="empty-cell">No payments recorded.</td></tr>
+              <tr><td colSpan={3} className="empty-cell">No payments yet. Record one from this booking.</td></tr>
             ) : (
               payments.map((payment) => (
                 <tr key={payment.payment_id}>

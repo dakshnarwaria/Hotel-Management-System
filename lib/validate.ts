@@ -30,14 +30,33 @@ export function isEmail(value: unknown, label = "Email"): string | null {
     : `${label} must be a valid email address`;
 }
 
+export function isMySqlDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+  const year = Number(value.slice(0, 4));
+  if (year < 1000 || year > 9999) return false;
+  const date = new Date(
+    Date.UTC(year, Number(value.slice(5, 7)) - 1, Number(value.slice(8, 10))),
+  );
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
 export function positiveNumber(value: unknown, label: string): string | null {
   if (value == null || String(value).trim() === "") {
     return `${label} is required`;
   }
-  const number = Number(String(value).trim());
-  return Number.isFinite(number) && number > 0
+  const raw = String(value).trim();
+  if (!/^\d+(?:\.\d{1,2})?$/.test(raw)) {
+    return `${label} must be a number with at most 2 decimal places`;
+  }
+  const number = Number(raw);
+  if (!Number.isFinite(number) || number <= 0) {
+    return `${label} must be greater than 0`;
+  }
+  return number <= 99_999_999.99
     ? null
-    : `${label} must be a number greater than 0`;
+    : `${label} must not exceed 99,999,999.99`;
 }
 
 export function nonNegativeNumber(
@@ -45,10 +64,17 @@ export function nonNegativeNumber(
   label: string,
 ): string | null {
   if (value == null || String(value).trim() === "") return null;
-  const number = Number(String(value).trim());
-  return Number.isFinite(number) && number >= 0
+  const raw = String(value).trim();
+  if (!/^\d+(?:\.\d{1,2})?$/.test(raw)) {
+    return `${label} must be a number with at most 2 decimal places`;
+  }
+  const number = Number(raw);
+  if (!Number.isFinite(number) || number < 0) {
+    return `${label} must be greater than or equal to 0`;
+  }
+  return number <= 99_999_999.99
     ? null
-    : `${label} must be a number greater than or equal to 0`;
+    : `${label} must not exceed 99,999,999.99`;
 }
 
 export function positiveInt(value: unknown, label: string): string | null {
@@ -56,9 +82,9 @@ export function positiveInt(value: unknown, label: string): string | null {
     return `${label} is required`;
   }
   const number = Number(String(value).trim());
-  return Number.isSafeInteger(number) && number > 0
+  return Number.isSafeInteger(number) && number > 0 && number <= 2_147_483_647
     ? null
-    : `${label} must be a positive integer`;
+    : `${label} must be a positive whole number no greater than 2,147,483,647`;
 }
 
 export function nonNegativeInt(value: unknown, label: string): string | null {

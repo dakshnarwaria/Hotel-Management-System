@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatCompactINR, formatCurrency, formatShortDate } from "@/lib/format";
+import { formatCurrency, formatShortDate } from "@/lib/format";
 import type { DashboardData } from "@/components/dashboard/types";
 
 export default function RevenueTrend({
@@ -44,7 +44,7 @@ export default function RevenueTrend({
               minTickGap={18}
             />
             <YAxis
-              tickFormatter={(value: number) => formatCompactINR(value)}
+              tickFormatter={(value: number) => formatCurrency(value)}
               tick={{ fill: "var(--chart-axis)", fontSize: 11 }}
               stroke="var(--chart-axis)"
               tickLine={false}

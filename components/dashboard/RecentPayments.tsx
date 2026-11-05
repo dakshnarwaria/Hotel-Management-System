@@ -32,7 +32,7 @@ export default function RecentPayments({
       <DataTable
         columns={columns}
         rows={rows}
-        emptyMessage="No payments recorded yet."
+        emptyMessage="No payments yet. Record one from a booking."
         rowKey={(row) => row.payment_id}
       />
     </section>

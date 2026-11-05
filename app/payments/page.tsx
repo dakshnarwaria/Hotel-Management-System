@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { CreditCard, Wallet } from "lucide-react";
 import DataTable, { type DataColumn } from "@/components/DataTable";
+import ErrorCard from "@/components/ErrorCard";
 import { FormField, SelectField } from "@/components/FormField";
 import PageHeader from "@/components/PageHeader";
 import RecordPaymentModal from "@/components/bookings/RecordPaymentModal";
@@ -33,7 +34,7 @@ export default function PaymentsPage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [search, setSearch] = useState("");
-  const { rows: payments, summary: listSummary, loading, refresh } =
+  const { rows: payments, summary: listSummary, loading, error, refresh } =
     useList<Payment, Summary>("/api/payments", {
       ...(method ? { method } : {}),
       ...(from && to ? { from, to } : {}),
@@ -145,20 +146,19 @@ export default function PaymentsPage() {
         />
       </section>
 
+      {error && <ErrorCard message={error} onRetry={refresh} />}
       <DataTable
         columns={columns}
         rows={payments}
         loading={loading}
-        emptyMessage="No payments match these filters."
+        emptyMessage="No payments match these filters. Record one from a booking or adjust the filters."
         rowKey={(row) => row.payment_id}
       />
 
       <RecordPaymentModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        onRecorded={() => {
-          refresh();
-        }}
+        onRecorded={() => undefined}
       />
     </>
   );

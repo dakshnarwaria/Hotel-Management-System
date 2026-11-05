@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Clipboard, Download, Printer } from "lucide-react";
 import Button from "@/components/Button";
 import DataTable, { type DataColumn } from "@/components/DataTable";
+import ErrorCard from "@/components/ErrorCard";
 import PageHeader from "@/components/PageHeader";
 import StatusBadge from "@/components/StatusBadge";
 import { useToast } from "@/components/Toast";
@@ -13,7 +14,7 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import type { ReportColumn, ReportDefinition } from "@/lib/reports";
 
 type ReportRow = Record<string, unknown>;
-type ResultSummary = { rowCount: number };
+type ResultSummary = { rowCount: number; reports: ReportDefinition[] };
 
 export default function ReportsClient({
   initialReport,
@@ -24,10 +25,6 @@ export default function ReportsClient({
   const { toast } = useToast();
   const [selectedId, setSelectedId] = useState(initialReport);
   const [sqlOpen, setSqlOpen] = useState(false);
-  const { rows: reports, loading: reportsLoading } = useList<ReportDefinition>(
-    "/api/reports",
-    {},
-  );
   const {
     rows,
     summary,
@@ -35,6 +32,7 @@ export default function ReportsClient({
     error,
     refresh,
   } = useList<ReportRow, ResultSummary>(`/api/reports/${selectedId}`, {});
+  const reports = summary?.reports ?? [];
   const report = reports.find((item) => item.id === selectedId);
 
   const columns = useMemo<DataColumn<ReportRow>[]>(
@@ -104,7 +102,7 @@ export default function ReportsClient({
             <h2>Lab reports</h2>
             <span>{reports.length}</span>
           </div>
-          {reportsLoading && reports.length === 0 ? (
+          {loading && reports.length === 0 ? (
             <div className="reports-loading">
               {Array.from({ length: 5 }, (_, index) => (
                 <span className="skeleton-line" key={index} />
@@ -136,7 +134,7 @@ export default function ReportsClient({
             <>
               <div className="report-print-heading">
                 <h1>{report.title}</h1>
-                <p>{new Date().toLocaleDateString("en-IN", { dateStyle: "long" })}</p>
+                <p>{formatDate(new Date())}</p>
               </div>
               <div className="surface report-detail-card">
                 <div className="report-title-row">
@@ -174,24 +172,15 @@ export default function ReportsClient({
                     </pre>
                   )}
                 </div>
+                {error && <ErrorCard message={error} onRetry={refresh} />}
                 <div className="report-row-count">
                   <span>{reportCount} rows</span>
-                  {error && (
-                    <span className="form-error" role="alert">
-                      {error}
-                    </span>
-                  )}
-                  {error && (
-                    <Button variant="secondary" size="sm" onClick={refresh}>
-                      Retry
-                    </Button>
-                  )}
                 </div>
                 <DataTable
                   columns={columns}
                   rows={rows}
                   loading={loading}
-                  emptyMessage="This report returned no rows."
+                  emptyMessage="This report returned no rows. Try another report."
                   rowKey={(row, index) =>
                     String(row.booking_id ?? row.guest_id ?? row.order_id ?? row.payment_id ?? row.room_no ?? index)
                   }
@@ -200,10 +189,11 @@ export default function ReportsClient({
             </>
           ) : (
             <section className="surface report-not-found">
-              <h2>{reportsLoading ? "Loading reports…" : "Report not found"}</h2>
-              {!reportsLoading && (
+              <h2>{loading ? "Loading reports…" : "Report not found"}</h2>
+              {!loading && !error && (
                 <p className="muted">Choose one of the available reports to continue.</p>
               )}
+              {error && <ErrorCard message={error} onRetry={refresh} />}
             </section>
           )}
         </section>

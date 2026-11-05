@@ -35,7 +35,7 @@ export default function TopPending({
       <DataTable
         columns={columns}
         rows={rows}
-        emptyMessage="No pending balances."
+        emptyMessage="No pending balances. New unpaid stays will appear here."
         rowKey={(row) => row.booking_id}
       />
     </section>

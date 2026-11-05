@@ -5,6 +5,7 @@ import { use, useCallback, useEffect, useState } from "react";
 import { ArrowLeft, CalendarClock, LogOut, Printer, XCircle } from "lucide-react";
 import Button from "@/components/Button";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import ErrorCard from "@/components/ErrorCard";
 import StatusBadge from "@/components/StatusBadge";
 import AddServiceModal from "@/components/bookings/AddServiceModal";
 import BillSummary, { type BillData } from "@/components/bookings/BillSummary";
@@ -19,6 +20,7 @@ type BookingDetail = {
   booking_id: number;
   dates: { check_in: string | Date; check_out: string | Date; nights: number };
   no_of_guests: number;
+  can_check_in: boolean | number;
   status: "Confirmed" | "Checked-In" | "Checked-Out" | "Cancelled";
   guest: {
     full_name: string;
@@ -38,16 +40,6 @@ type DetailResponse = {
   payments: PaymentRow[];
 };
 
-function dateOnly(value: string | Date) {
-  if (typeof value === "string") return value.slice(0, 10);
-  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
-}
-
-function todayLocal() {
-  const date = new Date();
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
 export default function BookingDetailsPage({
   params,
 }: {
@@ -57,6 +49,7 @@ export default function BookingDetailsPage({
   const request = useApi();
   const [detail, setDetail] = useState<DetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -74,9 +67,17 @@ export default function BookingDetailsPage({
     async function fetchDetail() {
       try {
         const data = await request<DetailResponse>(`/api/bookings/${id}`);
-        if (active) setDetail(data);
-      } catch {
-        if (active) setDetail(null);
+        if (active) {
+          setDetail(data);
+          setDetailError(null);
+        }
+      } catch (error) {
+        if (active) {
+          setDetail(null);
+          setDetailError(
+            error instanceof Error ? error.message : "Unable to load this booking.",
+          );
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -86,6 +87,20 @@ export default function BookingDetailsPage({
       active = false;
     };
   }, [id, request]);
+
+  async function retryDetail() {
+    setLoading(true);
+    setDetailError(null);
+    try {
+      setDetail(await request<DetailResponse>(`/api/bookings/${id}`));
+    } catch (error) {
+      setDetailError(
+        error instanceof Error ? error.message : "Unable to load this booking.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function performAction(action: "check-in" | "check-out" | "cancel") {
     if (!detail) return;
@@ -108,7 +123,6 @@ export default function BookingDetailsPage({
       await loadDetail();
       setCancelOpen(false);
     } catch {
-      // useApi displays request errors as toasts.
     } finally {
       setActionLoading(false);
       setCancelLoading(false);
@@ -126,6 +140,10 @@ export default function BookingDetailsPage({
     );
   }
 
+  if (detailError && !detail) {
+    return <ErrorCard message={detailError} onRetry={() => void retryDetail()} />;
+  }
+
   if (!detail || !booking) {
     return (
       <section className="surface setup-card">
@@ -139,7 +157,7 @@ export default function BookingDetailsPage({
     );
   }
 
-  const checkInIsFuture = dateOnly(booking.dates.check_in) > todayLocal();
+  const checkInIsUnavailable = !Boolean(booking.can_check_in);
 
   return (
     <>
@@ -161,9 +179,9 @@ export default function BookingDetailsPage({
             <>
               <Button
                 size="sm"
-                disabled={checkInIsFuture || actionLoading}
+                disabled={checkInIsUnavailable || actionLoading}
                 loading={actionLoading}
-                title={checkInIsFuture ? "Check-in is only available on or after the check-in date" : "Check in guest"}
+                title={checkInIsUnavailable ? "Check-in is only available on or after the check-in date" : "Check in guest"}
                 onClick={() => void performAction("check-in")}
               >
                 <CalendarClock size={15} /> Check-in

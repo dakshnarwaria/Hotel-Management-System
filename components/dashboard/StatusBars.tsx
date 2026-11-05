@@ -19,6 +19,9 @@ export default function StatusBars({
   return (
     <section className="surface dashboard-card">
       <h2 className="dashboard-card-title">Bookings by status</h2>
+      {rows.length === 0 ? (
+        <p className="chart-empty">No bookings yet. Create a booking to see status totals.</p>
+      ) : (
       <div className="chart-frame">
         <ResponsiveContainer width="100%" height={260}>
           <BarChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}>
@@ -37,6 +40,7 @@ export default function StatusBars({
           </BarChart>
         </ResponsiveContainer>
       </div>
+      )}
     </section>
   );
 }

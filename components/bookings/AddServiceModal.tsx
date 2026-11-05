@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Button from "@/components/Button";
+import ErrorCard from "@/components/ErrorCard";
 import { FormField, SelectField } from "@/components/FormField";
 import Modal from "@/components/Modal";
 import { useApi } from "@/hooks/useApi";
@@ -55,6 +56,8 @@ export default function AddServiceModal({
   const [saving, setSaving] = useState(false);
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [optionsFailed, setOptionsFailed] = useState(false);
+  const [optionsError, setOptionsError] = useState("");
+  const [optionsRetry, setOptionsRetry] = useState(0);
   const fixedBooking = bookingId !== undefined;
 
   useEffect(() => {
@@ -63,6 +66,7 @@ export default function AddServiceModal({
     async function loadOptions() {
       setLoadingOptions(true);
       setOptionsFailed(false);
+      setOptionsError("");
       try {
         const [serviceRows, bookingResult] = await Promise.all([
           request<ServiceOption[]>("/api/services"),
@@ -83,8 +87,13 @@ export default function AddServiceModal({
                   : String(checkedIn[0]?.booking_id ?? ""),
         );
         setOrderDate(todayValue());
-      } catch {
-        if (active) setOptionsFailed(true);
+      } catch (error) {
+        if (active) {
+          setOptionsFailed(true);
+          setOptionsError(
+            error instanceof Error ? error.message : "Could not load services",
+          );
+        }
       } finally {
         if (active) setLoadingOptions(false);
       }
@@ -93,7 +102,7 @@ export default function AddServiceModal({
     return () => {
       active = false;
     };
-  }, [bookingId, fixedBooking, open, request]);
+  }, [bookingId, fixedBooking, open, optionsRetry, request]);
 
   const activeBooking = fixedBooking
     ? null
@@ -149,8 +158,14 @@ export default function AddServiceModal({
       );
       onClose();
       onAdded();
-    } catch {
-      // useApi displays request errors as toasts.
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Could not record this service";
+      if (message.toLowerCase().includes("date")) {
+        setErrors((current) => ({ ...current, order_date: message }));
+      } else if (message.toLowerCase().includes("quantity")) {
+        setErrors((current) => ({ ...current, quantity: message }));
+      }
     } finally {
       setSaving(false);
     }
@@ -174,7 +189,10 @@ export default function AddServiceModal({
       {loadingOptions ? (
         <p className="muted">Loading checked-in bookings and services…</p>
       ) : optionsFailed ? (
-        <p className="form-error">Could not load bookings or services. Close and reopen this dialog to try again.</p>
+        <ErrorCard
+          message={optionsError}
+          onRetry={() => setOptionsRetry((current) => current + 1)}
+        />
       ) : (
       <form className="resource-form" onSubmit={(event) => void submit(event)} noValidate>
         {!fixedBooking && (

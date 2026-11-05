@@ -2,14 +2,10 @@ import type { RowDataPacket, ResultSetHeader } from "mysql2/promise";
 import { fail, handleDbError, ok } from "@/lib/api";
 import { query } from "@/lib/db";
 import { idFromParam } from "@/lib/master-data-api";
-import { positiveInt } from "@/lib/validate";
+import { isMySqlDate, positiveInt } from "@/lib/validate";
 
 function isValidDate(value: unknown): value is string {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return false;
-  }
-  const date = new Date(`${value}T00:00:00Z`);
-  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  return isMySqlDate(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -48,7 +44,7 @@ export async function createServiceOrder(request: Request) {
     );
     if (!bookings[0]) return fail("Booking not found", 404);
     if (bookings[0].status !== "Checked-In") {
-      return fail("Services can only be added while the guest is checked in", 400);
+      return fail("Services can only be added while the guest is checked in", 409);
     }
     const checkIn = String(bookings[0].check_in).slice(0, 10);
     const checkOut = String(bookings[0].check_out).slice(0, 10);
@@ -93,27 +89,16 @@ export async function listServiceOrders(request: Request) {
   }
   if (errors.length) return fail(errors.join(", "));
 
-  const filters: string[] = [];
-  const values: (string | number)[] = [];
-  if (rawServiceId) {
-    filters.push("o.service_id = ?");
-    values.push(Number(rawServiceId));
-  }
-  if (from) {
-    filters.push("o.order_date >= ? AND o.order_date <= ?");
-    values.push(from, to);
-  }
-  if (search) {
-    const pattern = `%${search}%`;
-    filters.push("(g.full_name LIKE ? OR CAST(b.booking_id AS CHAR) LIKE ?)");
-    values.push(pattern, pattern);
-  }
-
-  const where = filters.length ? ` WHERE ${filters.join(" AND ")}` : "";
-  const fromSql = `FROM Service_Orders o
-    JOIN Services s ON s.service_id = o.service_id
-    JOIN Bookings b ON b.booking_id = o.booking_id
-    JOIN Guests g ON g.guest_id = b.guest_id${where}`;
+  const values = [
+    rawServiceId || null,
+    rawServiceId ? Number(rawServiceId) : null,
+    from || null,
+    from,
+    to,
+    search || null,
+    `%${search}%`,
+    `%${search}%`,
+  ];
 
   try {
     const [orders, summaries, topServices] = await Promise.all([
@@ -122,19 +107,37 @@ export async function listServiceOrders(request: Request) {
                 b.room_no, b.status AS booking_status, o.service_id,
                 s.service_name, s.price, o.quantity,
                 (s.price * o.quantity) AS line_total
-         ${fromSql}
+         FROM Service_Orders o
+         JOIN Services s ON s.service_id = o.service_id
+         JOIN Bookings b ON b.booking_id = o.booking_id
+         JOIN Guests g ON g.guest_id = b.guest_id
+         WHERE (? IS NULL OR o.service_id = ?)
+           AND (? IS NULL OR (o.order_date >= ? AND o.order_date <= ?))
+           AND (? IS NULL OR g.full_name LIKE ? OR CAST(b.booking_id AS CHAR) LIKE ?)
          ORDER BY o.order_date DESC, o.order_id DESC`,
         values,
       ),
       query<RowDataPacket[]>(
         `SELECT COALESCE(SUM(s.price * o.quantity), 0) AS total_revenue,
                 COUNT(*) AS orders_count
-         ${fromSql}`,
+         FROM Service_Orders o
+         JOIN Services s ON s.service_id = o.service_id
+         JOIN Bookings b ON b.booking_id = o.booking_id
+         JOIN Guests g ON g.guest_id = b.guest_id
+         WHERE (? IS NULL OR o.service_id = ?)
+           AND (? IS NULL OR (o.order_date >= ? AND o.order_date <= ?))
+           AND (? IS NULL OR g.full_name LIKE ? OR CAST(b.booking_id AS CHAR) LIKE ?)`,
         values,
       ),
       query<RowDataPacket[]>(
         `SELECT s.service_name, SUM(o.quantity) AS quantity
-         ${fromSql}
+         FROM Service_Orders o
+         JOIN Services s ON s.service_id = o.service_id
+         JOIN Bookings b ON b.booking_id = o.booking_id
+         JOIN Guests g ON g.guest_id = b.guest_id
+         WHERE (? IS NULL OR o.service_id = ?)
+           AND (? IS NULL OR (o.order_date >= ? AND o.order_date <= ?))
+           AND (? IS NULL OR g.full_name LIKE ? OR CAST(b.booking_id AS CHAR) LIKE ?)
          GROUP BY s.service_id, s.service_name
          ORDER BY quantity DESC, s.service_name
          LIMIT 1`,
@@ -160,7 +163,12 @@ export async function deleteServiceOrder(
   _request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const params = await context.params;
+  let params: { id: string };
+  try {
+    params = await context.params;
+  } catch (error) {
+    return handleDbError(error);
+  }
   const id = idFromParam(params.id);
   if (id === null) return fail("Invalid service order id", 400);
   try {
@@ -174,7 +182,7 @@ export async function deleteServiceOrder(
     if (orders[0].status !== "Checked-In") {
       return fail(
         "Service orders can only be removed while the guest is checked in",
-        400,
+        409,
       );
     }
     await query("DELETE FROM Service_Orders WHERE order_id = ?", [id]);

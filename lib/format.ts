@@ -1,25 +1,13 @@
 const currencyFormatter = new Intl.NumberFormat("en-IN", {
   style: "currency",
   currency: "INR",
-  maximumFractionDigits: 0,
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
 });
 
 export function formatCurrency(value: number | string | null): string {
   const amount = Number(value ?? 0);
   return currencyFormatter.format(Number.isFinite(amount) ? amount : 0);
-}
-
-export function formatCompactINR(value: number | string | null): string {
-  const amount = Number(value ?? 0);
-  if (!Number.isFinite(amount)) return formatCurrency(0);
-  const absolute = Math.abs(amount);
-  if (absolute >= 10_000_000) {
-    return `₹${(amount / 10_000_000).toFixed(1)} Cr`;
-  }
-  if (absolute >= 100_000) {
-    return `₹${(amount / 100_000).toFixed(1)} L`;
-  }
-  return formatCurrency(amount);
 }
 
 export function formatDate(value: string | Date | null): string {

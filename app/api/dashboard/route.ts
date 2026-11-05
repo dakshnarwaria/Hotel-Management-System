@@ -1,7 +1,6 @@
 import type { RowDataPacket } from "mysql2/promise";
-import { handleDbError, ok } from "@/lib/api";
+import { fail, handleDbError, ok } from "@/lib/api";
 import { query } from "@/lib/db";
-import { ROOM_DISPLAY_STATUS_SQL } from "@/lib/roomStatus";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +24,15 @@ function getRangeDays(range: Range) {
 
 export async function GET(request: Request) {
   const requestedRange = new URL(request.url).searchParams.get("range");
+  if (
+    requestedRange !== null &&
+    requestedRange !== "7" &&
+    requestedRange !== "30" &&
+    requestedRange !== "90" &&
+    requestedRange !== "all"
+  ) {
+    return fail("Range must be 7, 30, 90, or all", 400);
+  }
   const range: Range =
     requestedRange === "7" ||
     requestedRange === "30" ||
@@ -33,16 +41,7 @@ export async function GET(request: Request) {
       ? requestedRange
       : "30";
   const days = getRangeDays(range);
-  const rangeFilter =
-    range === "all"
-      ? ""
-      : "AND b.check_in >= DATE_SUB(CURDATE(), INTERVAL ? DAY) AND b.check_in <= CURDATE()";
-  const paymentRangeFilter =
-    range === "all"
-      ? ""
-      : "WHERE p.pay_date >= DATE_SUB(CURDATE(), INTERVAL ? DAY) AND p.pay_date <= CURDATE()";
-  const revenueRangeParams = range === "all" ? [] : [days];
-  const paymentRangeParams = range === "all" ? [] : [days];
+  const rangeDays = range === "all" ? null : days;
   const trendDays = range === "all" ? 89 : days;
 
   try {
@@ -65,7 +64,23 @@ export async function GET(request: Request) {
     ] = await Promise.all([
       query<RoomStatusRow[]>(
         `SELECT display_status, COUNT(*) AS total
-         FROM (SELECT (${ROOM_DISPLAY_STATUS_SQL}) AS display_status FROM Rooms r) room_status
+         FROM (
+           SELECT CASE
+             WHEN r.status = 'Maintenance' THEN 'Maintenance'
+             WHEN EXISTS (
+               SELECT 1 FROM Bookings rs
+               WHERE rs.room_no = r.room_no AND rs.status = 'Checked-In'
+             ) THEN 'Occupied'
+             WHEN EXISTS (
+               SELECT 1 FROM Bookings rs
+               WHERE rs.room_no = r.room_no
+                 AND rs.status = 'Confirmed'
+                 AND rs.check_out > CURDATE()
+             ) THEN 'Reserved'
+             ELSE 'Available'
+           END AS display_status
+           FROM Rooms r
+         ) room_status
          GROUP BY display_status`,
       ),
       query<DashboardRow[]>(
@@ -80,7 +95,8 @@ export async function GET(request: Request) {
       query<DashboardRow[]>(
         `SELECT COALESCE(SUM(grand_total), 0) AS total_billed,
            COALESCE(SUM(paid), 0) AS total_collected,
-           COALESCE(SUM(CASE WHEN balance > 0 THEN balance ELSE 0 END), 0) AS total_remaining,
+           (SELECT COALESCE(SUM(CASE WHEN balance > 0 THEN balance ELSE 0 END), 0)
+            FROM booking_bills) AS total_remaining,
            NULL AS total_gst,
            COALESCE(SUM(services_total), 0) AS service_revenue,
            (SELECT COALESCE(SUM(amount), 0) FROM Payments
@@ -94,18 +110,22 @@ export async function GET(request: Request) {
            COALESCE(SUM(b.total_amount), 0) AS revenue
          FROM Room_Types rt
          LEFT JOIN Rooms r ON r.type_id = rt.type_id
-         LEFT JOIN Bookings b ON b.room_no = r.room_no AND b.status <> 'Cancelled' ${rangeFilter}
+         LEFT JOIN Bookings b
+           ON b.room_no = r.room_no AND b.status <> 'Cancelled'
+           AND (? IS NULL OR (b.check_in >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+                              AND b.check_in <= CURDATE()))
          GROUP BY rt.type_id, rt.type_name
          ORDER BY revenue DESC, rt.type_name`,
-        revenueRangeParams,
+        [rangeDays, rangeDays],
       ),
       query<DashboardRow[]>(
         `SELECT p.method, COUNT(*) AS txns, COALESCE(SUM(p.amount), 0) AS total
          FROM Payments p
-         ${paymentRangeFilter}
+         WHERE (? IS NULL OR (p.pay_date >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+                              AND p.pay_date <= CURDATE()))
          GROUP BY p.method
          ORDER BY total DESC`,
-        paymentRangeParams,
+        [rangeDays, rangeDays],
       ),
       query<DashboardRow[]>(
         `SELECT DATE_FORMAT(p.pay_date, '%Y-%m-%d') AS day, SUM(p.amount) AS total

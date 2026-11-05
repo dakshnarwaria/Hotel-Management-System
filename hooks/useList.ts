@@ -60,6 +60,11 @@ export function useList<T, S = unknown>(
   }, []);
 
   useEffect(() => {
+    window.addEventListener("hotel:data-change", refresh);
+    return () => window.removeEventListener("hotel:data-change", refresh);
+  }, [refresh]);
+
+  useEffect(() => {
     const id = ++requestId.current;
     const controller = new AbortController();
     const queryString = paramsString ? `?${paramsString}` : "";

@@ -41,7 +41,7 @@ export default function TodayLists({
         <DataTable
           columns={columns}
           rows={arrivals}
-          emptyMessage="No arrivals today"
+          emptyMessage="No arrivals today. Upcoming confirmed stays appear here."
           rowKey={(row) => row.booking_id}
         />
       </section>
@@ -50,7 +50,7 @@ export default function TodayLists({
         <DataTable
           columns={columns}
           rows={departures}
-          emptyMessage="No departures today"
+          emptyMessage="No departures today. Checked-in stays due out today appear here."
           rowKey={(row) => row.booking_id}
         />
       </section>

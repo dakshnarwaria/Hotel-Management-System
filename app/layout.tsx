@@ -4,7 +4,10 @@ import { ToastProvider } from "@/components/Toast";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Hearth & Stay | Hotel Management",
+  title: {
+    default: "Hearth & Stay | Hotel Management",
+    template: "%s | Hearth & Stay",
+  },
   description: "Hotel operations and booking management.",
 };
 

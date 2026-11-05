@@ -21,7 +21,7 @@ export default function PaymentsByMethod({
     <section className="surface dashboard-card">
       <h2 className="dashboard-card-title">Payments by method</h2>
       {rows.length === 0 ? (
-        <p className="chart-empty">No payments in this range.</p>
+        <p className="chart-empty">No payments in this range. Record one from a booking.</p>
       ) : (
         <div className="donut-layout">
           <div className="chart-frame donut-frame">

@@ -57,6 +57,7 @@ export interface Booking {
   room_rate: number;
   no_of_guests: number;
   status: "Confirmed" | "Checked-In" | "Checked-Out" | "Cancelled";
+  can_check_in: boolean | number;
   room_charge: number;
   room_gst_rate: number;
   room_gst: number;

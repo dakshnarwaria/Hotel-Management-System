@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatCompactINR, formatCurrency } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
 import type { DashboardData } from "@/components/dashboard/types";
 
 export default function RevenueByRoomType({
@@ -20,6 +20,9 @@ export default function RevenueByRoomType({
   return (
     <section className="surface dashboard-card">
       <h2 className="dashboard-card-title">Revenue by room type</h2>
+      {rows.length === 0 ? (
+        <p className="chart-empty">No room types yet. Add a room type to track revenue.</p>
+      ) : (
       <div className="chart-frame">
         <ResponsiveContainer width="100%" height={260}>
           <BarChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
@@ -36,7 +39,7 @@ export default function RevenueByRoomType({
               height={58}
             />
             <YAxis
-              tickFormatter={(value: number) => formatCompactINR(value)}
+              tickFormatter={(value: number) => formatCurrency(value)}
               tick={{ fill: "var(--chart-axis)", fontSize: 11 }}
               stroke="var(--chart-axis)"
               tickLine={false}
@@ -56,6 +59,7 @@ export default function RevenueByRoomType({
           </BarChart>
         </ResponsiveContainer>
       </div>
+      )}
     </section>
   );
 }

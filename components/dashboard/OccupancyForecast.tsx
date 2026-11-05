@@ -14,12 +14,17 @@ import type { DashboardData } from "@/components/dashboard/types";
 
 export default function OccupancyForecast({
   rows,
+  roomCount,
 }: {
   rows: DashboardData["occupancy_forecast"];
+  roomCount: number;
 }) {
   return (
     <section className="surface dashboard-card">
       <h2 className="dashboard-card-title">Occupancy forecast</h2>
+      {roomCount === 0 && (
+        <p className="chart-empty">Add rooms to see the occupancy forecast.</p>
+      )}
       <div className="chart-frame">
         <ResponsiveContainer width="100%" height={250}>
           <AreaChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>

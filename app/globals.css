@@ -79,8 +79,19 @@ a {
   text-decoration: none;
 }
 
+:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 42%, transparent);
+  outline-offset: 2px;
+}
+
 .app-layout {
   min-height: 100vh;
+}
+
+.mobile-menu-toggle,
+.mobile-nav-close,
+.mobile-nav-backdrop {
+  display: none;
 }
 
 .sidebar {
@@ -195,6 +206,7 @@ a {
 
 .main-content {
   width: min(100%, 1440px);
+  min-width: 0;
   margin-inline: auto;
   padding: 1.5rem;
 }
@@ -237,6 +249,65 @@ a {
 
 .page-header .page-title {
   margin-bottom: 0;
+}
+
+.error-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-block: 1rem;
+  border: 1px solid var(--status-occupied-text);
+  padding: 1rem 1.25rem;
+}
+
+.error-card p {
+  margin: 0;
+  color: var(--foreground);
+}
+
+.error-boundary,
+.route-loading {
+  display: grid;
+  justify-items: start;
+  gap: 1rem;
+  max-width: 46rem;
+  margin: 3rem auto;
+  padding: clamp(1.25rem, 4vw, 2rem);
+}
+
+.route-loading {
+  width: min(100%, 56rem);
+}
+
+.skeleton {
+  display: block;
+  height: 1.15rem;
+  border-radius: 0.4rem;
+  background: color-mix(in srgb, var(--muted) 18%, transparent);
+  animation: skeleton-pulse 1.2s ease-in-out infinite alternate;
+}
+
+.skeleton-title {
+  width: min(18rem, 70%);
+  height: 2rem;
+}
+
+.skeleton-row {
+  width: 100%;
+}
+
+@keyframes skeleton-pulse {
+  to {
+    opacity: 0.45;
+  }
+}
+
+@media (max-width: 600px) {
+  .error-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 
 .button {
@@ -806,17 +877,98 @@ a {
   }
 
   .main-content {
+    flex: 1;
     padding: 2.5rem clamp(2rem, 5vw, 4.5rem);
   }
 }
 
 @media (max-width: 1023px) {
   .sidebar {
-    gap: 1rem;
+    position: fixed;
+    z-index: 61;
+    inset: 0 auto 0 0;
+    width: min(19rem, 88vw);
+    height: 100dvh;
+    gap: 1.5rem;
+    overflow-y: auto;
+    transform: translateX(-105%);
+    transition: transform 200ms ease;
+  }
+
+  .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  .sidebar-nav {
+    flex-direction: column;
+    overflow: visible;
   }
 
   .sidebar-footer {
-    justify-content: flex-start;
+    display: block;
+  }
+
+  .sidebar-footer p {
+    display: block;
+    margin-top: 1rem;
+  }
+
+  .mobile-menu-toggle {
+    position: fixed;
+    z-index: 50;
+    top: 0.75rem;
+    left: 0.75rem;
+    display: inline-flex;
+    min-height: 2.5rem;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 0.7rem;
+    padding: 0.55rem 0.75rem;
+    background: var(--background);
+    color: var(--foreground);
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    font: inherit;
+  }
+
+  .mobile-menu-toggle:hover,
+  .mobile-nav-close:hover {
+    background: var(--border);
+  }
+
+  .mobile-menu-toggle:focus-visible,
+  .mobile-nav-close:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--accent) 42%, transparent);
+    outline-offset: 2px;
+  }
+
+  .mobile-nav-backdrop {
+    position: fixed;
+    z-index: 60;
+    inset: 0;
+    display: block;
+    border: 0;
+    background: rgb(18 14 11 / 55%);
+  }
+
+  .mobile-nav-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    display: grid;
+    width: 2.5rem;
+    height: 2.5rem;
+    place-items: center;
+    border: 1px solid rgb(243 233 220 / 24%);
+    border-radius: 0.7rem;
+    background: transparent;
+    color: #f3e9dc;
+    cursor: pointer;
+  }
+
+  .main-content {
+    padding-top: 4.5rem;
   }
 }
 
@@ -1472,6 +1624,7 @@ a {
   grid-template-columns: auto 1fr;
   align-items: center;
   gap: 0.25rem 0.7rem;
+  min-width: 0;
   padding: 1rem;
   color: var(--muted);
   font-size: 0.82rem;
@@ -1483,8 +1636,10 @@ a {
 
 .payment-summary-card strong {
   grid-column: 2;
+  min-width: 0;
   color: var(--foreground);
   font-size: 1.1rem;
+  overflow-wrap: anywhere;
 }
 
 .payment-summary-icon {
@@ -2159,7 +2314,7 @@ a {
 
 @media (max-width: 639px) {
   .main-content {
-    padding: 1.25rem 1rem;
+    padding: 4.5rem 1rem 1.25rem;
   }
 
   .page-header {
@@ -2229,5 +2384,16 @@ a {
   .booking-step {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }

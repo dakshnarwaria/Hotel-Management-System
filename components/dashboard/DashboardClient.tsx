@@ -55,6 +55,12 @@ export default function DashboardClient() {
   const refresh = useCallback(() => {
     setRefreshVersion((current) => current + 1);
   }, []);
+
+  useEffect(() => {
+    window.addEventListener("hotel:data-change", refresh);
+    return () => window.removeEventListener("hotel:data-change", refresh);
+  }, [refresh]);
+
   const requestKey = `${range}:${refreshVersion}`;
   const loading = requestState.key !== requestKey || requestState.loading;
   const error = requestState.key === requestKey ? requestState.error : null;
@@ -200,7 +206,10 @@ export default function DashboardClient() {
 
           <div className="dashboard-grid dashboard-grid-two">
             <RoomStatusDonut rooms={data.rooms} />
-            <OccupancyForecast rows={data.occupancy_forecast} />
+            <OccupancyForecast
+              rows={data.occupancy_forecast}
+              roomCount={data.rooms.total}
+            />
           </div>
           <div className="dashboard-grid dashboard-grid-two">
             <RevenueTrend

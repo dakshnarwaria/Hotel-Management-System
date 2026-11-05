@@ -25,6 +25,13 @@ export async function listAvailableRooms(request: Request) {
   if (errors.length) return fail(errors.join(", "));
 
   try {
+    const dateRows = await query<RowDataPacket[]>(
+      "SELECT ? >= CURDATE() AS valid_check_in",
+      [checkIn],
+    );
+    if (Number(dateRows[0]?.valid_check_in) !== 1) {
+      return fail("Check-in date cannot be in the past");
+    }
     const nights = Math.round(
       (Date.parse(`${checkOut}T00:00:00Z`) -
         Date.parse(`${checkIn}T00:00:00Z`)) /

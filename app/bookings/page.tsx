@@ -6,6 +6,7 @@ import { ArrowRight, CalendarCheck, CalendarClock, LogOut, XCircle } from "lucid
 import Button from "@/components/Button";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import DataTable from "@/components/DataTable";
+import ErrorCard from "@/components/ErrorCard";
 import { FormField } from "@/components/FormField";
 import NewBookingModal from "@/components/bookings/NewBookingModal";
 import FinalBillModal from "@/components/bookings/FinalBillModal";
@@ -27,23 +28,13 @@ const tabs: { label: keyof Counts; status: string }[] = [
   { label: "Cancelled", status: "Cancelled" },
 ];
 
-function dateOnly(value: string | Date): string {
-  if (typeof value === "string") return value.slice(0, 10);
-  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
-}
-
-function todayLocal() {
-  const date = new Date();
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
 export default function BookingsPage() {
   const request = useApi();
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const { rows: bookings, summary, loading, refresh } = useList<Booking, Counts>(
+  const { rows: bookings, summary, loading, error, refresh } = useList<Booking, Counts>(
     "/api/bookings",
     {
       ...(status ? { status } : {}),
@@ -72,9 +63,7 @@ export default function BookingsPage() {
         { method: "POST" },
         `Booking #${booking.booking_id} checked in`,
       );
-      refresh();
     } catch {
-      // useApi displays request errors as toasts.
     } finally {
       setActionLoading(null);
     }
@@ -89,9 +78,7 @@ export default function BookingsPage() {
         `Booking #${booking.booking_id} checked out`,
       );
       setFinalBill(bill);
-      refresh();
     } catch {
-      // useApi displays request errors as toasts.
     } finally {
       setActionLoading(null);
     }
@@ -107,9 +94,7 @@ export default function BookingsPage() {
         `Booking #${cancelTarget.booking_id} cancelled`,
       );
       setCancelTarget(null);
-      refresh();
     } catch {
-      // useApi displays request errors as toasts.
     } finally {
       setCancelLoading(false);
     }
@@ -225,14 +210,15 @@ export default function BookingsPage() {
         />
       </div>
 
+      {error && <ErrorCard message={error} onRetry={refresh} />}
       <DataTable<Booking>
         columns={columns}
         rows={bookings}
         loading={loading}
-        emptyMessage="No bookings match these filters."
+        emptyMessage="No bookings match these filters. Clear the filters or choose New Booking to start."
         rowKey={(row) => row.booking_id}
         actions={(booking) => {
-          const isFuture = dateOnly(booking.check_in) > todayLocal();
+          const checkInUnavailable = !Boolean(booking.can_check_in);
           const busy = actionLoading === booking.booking_id;
           return (
             <div className="row-actions booking-actions">
@@ -248,9 +234,9 @@ export default function BookingsPage() {
                   <Button
                     size="sm"
                     loading={busy}
-                    disabled={isFuture}
+                    disabled={checkInUnavailable || busy}
                     title={
-                      isFuture
+                      checkInUnavailable
                         ? "Check-in is only available on or after the check-in date"
                         : "Check in guest"
                     }
@@ -302,7 +288,6 @@ export default function BookingsPage() {
         onClose={() => setNewBookingOpen(false)}
         onCreated={() => {
           setNewBookingOpen(false);
-          refresh();
         }}
       />
     </>

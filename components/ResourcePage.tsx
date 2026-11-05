@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Pencil, Plus, Trash2, X } from "lucide-react";
 import Button from "@/components/Button";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import DataTable from "@/components/DataTable";
+import ErrorCard from "@/components/ErrorCard";
 import { FormField, SelectField } from "@/components/FormField";
 import Modal from "@/components/Modal";
 import PageHeader from "@/components/PageHeader";
@@ -24,6 +25,9 @@ export default function ResourcePage({ resource }: { resource: string }) {
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [availabilityOn, setAvailabilityOn] = useState("");
   const [roomTypes, setRoomTypes] = useState<Row[]>([]);
+  const [roomTypesLoaded, setRoomTypesLoaded] = useState(false);
+  const [roomTypesLoading, setRoomTypesLoading] = useState(false);
+  const [roomTypesError, setRoomTypesError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [formValues, setFormValues] = useState<FormValues>({});
@@ -35,7 +39,7 @@ export default function ResourcePage({ resource }: { resource: string }) {
     null,
   );
 
-  const { rows, loading, refresh } = useList<Row>(config.endpoint, {
+  const { rows, loading, error, refresh } = useList<Row>(config.endpoint, {
     ...filters,
     ...(search ? { search } : {}),
     ...(resource === "rooms" && availabilityOn
@@ -43,12 +47,20 @@ export default function ResourcePage({ resource }: { resource: string }) {
       : {}),
   });
 
-  useEffect(() => {
-    if (!config.roomOptions || !modalOpen || roomTypes.length > 0) return;
-    request<Row[]>("/api/room-types")
-      .then(setRoomTypes)
-      .catch(() => setRoomTypes([]));
-  }, [config.roomOptions, modalOpen, request, roomTypes.length]);
+  const loadRoomTypes = useCallback(async () => {
+    setRoomTypesLoading(true);
+    setRoomTypesError(null);
+    try {
+      setRoomTypes(await request<Row[]>("/api/room-types"));
+      setRoomTypesLoaded(true);
+    } catch (error) {
+      setRoomTypesError(
+        error instanceof Error ? error.message : "Could not load room types",
+      );
+    } finally {
+      setRoomTypesLoading(false);
+    }
+  }, [request]);
 
   const fields = useMemo(() => {
     if (!config.roomOptions) return config.fields;
@@ -73,6 +85,7 @@ export default function ResourcePage({ resource }: { resource: string }) {
     setFormValues({ ...config.defaults });
     setFieldErrors({});
     setModalOpen(true);
+    if (config.roomOptions && !roomTypesLoaded) void loadRoomTypes();
   }
 
   function openEdit(row: Row) {
@@ -85,6 +98,7 @@ export default function ResourcePage({ resource }: { resource: string }) {
     setFormValues(values);
     setFieldErrors({});
     setModalOpen(true);
+    if (config.roomOptions && !roomTypesLoaded) void loadRoomTypes();
   }
 
   function updateField(name: string, value: string) {
@@ -129,9 +143,15 @@ export default function ResourcePage({ resource }: { resource: string }) {
         `${config.title.slice(0, -1)} ${editing ? "updated" : "added"} successfully`,
       );
       setModalOpen(false);
-      refresh();
-    } catch {
-      // useApi displays request errors as toasts.
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Could not save this record";
+      const field = fields.find((item) =>
+        message.toLowerCase().includes(item.label.toLowerCase()),
+      );
+      if (field) {
+        setFieldErrors((current) => ({ ...current, [field.name]: message }));
+      }
     } finally {
       setSaving(false);
     }
@@ -147,9 +167,7 @@ export default function ResourcePage({ resource }: { resource: string }) {
         `${config.title.slice(0, -1)} deleted successfully`,
       );
       setDeleting(null);
-      refresh();
     } catch {
-      // useApi displays request errors as toasts.
     } finally {
       setDeleteLoading(false);
     }
@@ -170,9 +188,7 @@ export default function ResourcePage({ resource }: { resource: string }) {
         { method: "PATCH", body: JSON.stringify({ status }) },
         `Room ${roomNo} marked ${status.toLowerCase()}`,
       );
-      refresh();
     } catch {
-      // useApi displays request errors as toasts.
     } finally {
       setQuickStatusLoading(null);
     }
@@ -276,12 +292,23 @@ export default function ResourcePage({ resource }: { resource: string }) {
         )}
       </div>
 
+      {error && <ErrorCard message={error} onRetry={refresh} />}
       <DataTable<Row>
         key={dataKey}
         columns={columns}
         rows={rows}
         loading={loading}
-        emptyMessage={`No ${config.title.toLowerCase()} found.`}
+        emptyMessage={
+          resource === "guests"
+            ? "No guests yet. Add a guest to start a booking."
+            : resource === "room-types"
+              ? "No room types yet. Add a room type before adding rooms."
+              : resource === "rooms"
+                ? "No rooms match these filters. Add a room or adjust the filters."
+                : resource === "employees"
+                  ? "No employees yet. Add an employee to assign bookings."
+                  : "No services yet. Add a service before recording an order."
+        }
         rowKey={(row) => String(row[config.idKey])}
         actions={(row) => (
           <div className="row-actions">
@@ -390,6 +417,13 @@ export default function ResourcePage({ resource }: { resource: string }) {
                 />
               );
             })}
+          {roomTypesError && (
+            <ErrorCard
+              message={roomTypesError}
+              onRetry={() => void loadRoomTypes()}
+            />
+          )}
+          {roomTypesLoading && <p className="muted">Loading room types…</p>}
           {resource === "guests" && (
             <GuestFormFields
               values={{

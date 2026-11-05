@@ -5,10 +5,14 @@ import mysql, {
   type RowDataPacket,
 } from "mysql2/promise";
 
-let pool: Pool | undefined;
+const globalForMysql = globalThis as typeof globalThis & {
+  hotelManagementPool?: Pool;
+};
 
 function getPool(): Pool {
-  if (pool) return pool;
+  if (globalForMysql.hotelManagementPool) {
+    return globalForMysql.hotelManagementPool;
+  }
 
   const { DB_HOST, DB_USER, DB_PASSWORD, DB_NAME } = process.env;
   const missing = Object.entries({ DB_HOST, DB_USER, DB_NAME })
@@ -19,11 +23,12 @@ function getPool(): Pool {
     throw new Error(`Missing database configuration: ${missing.join(", ")}`);
   }
 
-  pool = mysql.createPool({
+  globalForMysql.hotelManagementPool = mysql.createPool({
     host: DB_HOST,
     user: DB_USER,
     password: DB_PASSWORD,
     database: DB_NAME,
+    port: Number(process.env.DB_PORT || 3306),
     decimalNumbers: true,
     dateStrings: true,
     waitForConnections: true,
@@ -31,7 +36,7 @@ function getPool(): Pool {
     queueLimit: 0,
   });
 
-  return pool;
+  return globalForMysql.hotelManagementPool;
 }
 
 export async function query<T extends QueryResult = RowDataPacket[]>(

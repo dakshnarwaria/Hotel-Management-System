@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Button from "@/components/Button";
+import ErrorCard from "@/components/ErrorCard";
 import { FormField, SelectField } from "@/components/FormField";
 import Modal from "@/components/Modal";
 import { useApi } from "@/hooks/useApi";
@@ -35,12 +36,15 @@ export default function RecordPaymentModal({
   const [method, setMethod] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [bookingError, setBookingError] = useState("");
+  const [bookingRetry, setBookingRetry] = useState(0);
   const fixedBooking = bookingId !== undefined;
 
   useEffect(() => {
     if (!open || fixedBooking) return;
     let active = true;
     async function loadBookings() {
+      setBookingError("");
       try {
         const result = await request<{ bookings: Booking[] }>("/api/bookings");
         if (!active) return;
@@ -59,15 +63,19 @@ export default function RecordPaymentModal({
             ? current
             : String(eligible[0]?.booking_id ?? ""),
         );
-      } catch {
-        // useApi displays request errors as toasts.
+      } catch (error) {
+        if (active) {
+          setBookingError(
+            error instanceof Error ? error.message : "Could not load bookings",
+          );
+        }
       }
     }
     void loadBookings();
     return () => {
       active = false;
     };
-  }, [fixedBooking, open, request]);
+  }, [bookingRetry, fixedBooking, open, request]);
 
   const selectedBooking = bookings.find(
     (booking) => String(booking.booking_id) === selectedId,
@@ -106,9 +114,7 @@ export default function RecordPaymentModal({
     if (!selectedId) nextErrors.booking_id = "Booking is required";
     const amountError = positiveNumber(amount, "Amount");
     if (amountError) nextErrors.amount = amountError;
-    else if (!/^\d+(?:\.\d{1,2})?$/.test(amount.trim())) {
-      nextErrors.amount = "Amount must have at most 2 decimal places";
-    } else if (Number(amount) > availableBalance) {
+    else if (Number(amount) > availableBalance) {
       nextErrors.amount = "Payment exceeds the remaining amount";
     }
     const methodRequired = method ? null : "Method is required";
@@ -134,8 +140,12 @@ export default function RecordPaymentModal({
       reset();
       onClose();
       onRecorded();
-    } catch {
-      // useApi displays request errors as toasts.
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Could not record payment";
+      if (/payment|amount|remaining|balance/i.test(message)) {
+        setErrors((current) => ({ ...current, amount: message }));
+      }
     } finally {
       setSaving(false);
     }
@@ -148,7 +158,13 @@ export default function RecordPaymentModal({
           <span>Remaining</span>
           <strong>{formatCurrency(availableBalance)}</strong>
         </div>
-        {!fixedBooking && (
+        {!fixedBooking && bookingError && (
+          <ErrorCard
+            message={bookingError}
+            onRetry={() => setBookingRetry((current) => current + 1)}
+          />
+        )}
+        {!fixedBooking && !bookingError && (
           <SelectField
             name="booking_id"
             label="Booking"

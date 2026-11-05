@@ -17,10 +17,11 @@ import {
 type Values = Record<string, string | number | null>;
 type Validation = { values: Values; errors: string[] };
 type Config = {
-  table: string;
-  idColumn: string;
   insertColumns: string[];
   updateColumns: string[];
+  insertSql: string;
+  updateSql: string;
+  deleteSql: string;
   selectById: string;
   list: (params: URLSearchParams) => Promise<RowDataPacket[]>;
   validate: (input: Record<string, unknown>) => Validation;
@@ -44,7 +45,9 @@ async function readBody(request: Request) {
 function idFromParam(rawId: string): number | null {
   if (!/^\d+$/.test(rawId)) return null;
   const id = Number(rawId);
-  return Number.isSafeInteger(id) && id > 0 ? id : null;
+  return Number.isSafeInteger(id) && id > 0 && id <= 2_147_483_647
+    ? id
+    : null;
 }
 
 export function createResourceHandlers(config: Config) {
@@ -68,10 +71,8 @@ export function createResourceHandlers(config: Config) {
     if (errors.length) return fail(errors.join(", "));
 
     try {
-      const placeholders = config.insertColumns.map(() => "?").join(", ");
-      const columns = config.insertColumns.join(", ");
       const result = await query<ResultSetHeader>(
-        `INSERT INTO ${config.table} (${columns}) VALUES (${placeholders})`,
+        config.insertSql,
         config.insertColumns.map((column) => values[column] ?? null),
       );
       const insertId =
@@ -94,7 +95,12 @@ export function createResourceHandlers(config: Config) {
     context: { params: Promise<Record<string, string>> },
     paramName: string,
   ) {
-    const params = await context.params;
+    let params: Record<string, string>;
+    try {
+      params = await context.params;
+    } catch (error) {
+      return handleDbError(error);
+    }
     const id = idFromParam(params[paramName] ?? "");
     if (id === null) return fail("Invalid id", 400);
     try {
@@ -110,7 +116,12 @@ export function createResourceHandlers(config: Config) {
     context: { params: Promise<Record<string, string>> },
     paramName: string,
   ) {
-    const params = await context.params;
+    let params: Record<string, string>;
+    try {
+      params = await context.params;
+    } catch (error) {
+      return handleDbError(error);
+    }
     const id = idFromParam(params[paramName] ?? "");
     if (id === null) return fail("Invalid id", 400);
     const parsed = await readBody(request);
@@ -119,11 +130,8 @@ export function createResourceHandlers(config: Config) {
     if (errors.length) return fail(errors.join(", "));
 
     try {
-      const assignments = config.updateColumns
-        .map((column) => `${column} = ?`)
-        .join(", ");
       await query(
-        `UPDATE ${config.table} SET ${assignments} WHERE ${config.idColumn} = ?`,
+        config.updateSql,
         [...config.updateColumns.map((column) => values[column] ?? null), id],
       );
       const saved = await getRow(id);
@@ -141,16 +149,18 @@ export function createResourceHandlers(config: Config) {
     context: { params: Promise<Record<string, string>> },
     paramName: string,
   ) {
-    const params = await context.params;
+    let params: Record<string, string>;
+    try {
+      params = await context.params;
+    } catch (error) {
+      return handleDbError(error);
+    }
     const id = idFromParam(params[paramName] ?? "");
     if (id === null) return fail("Invalid id", 400);
     try {
       const existing = await getRow(id);
       if (!existing) return fail("Record not found", 404);
-      await query(
-        `DELETE FROM ${config.table} WHERE ${config.idColumn} = ?`,
-        [id],
-      );
+      await query(config.deleteSql, [id]);
       return ok({ deleted: true });
     } catch (error) {
       return handleDbError(error, {
@@ -183,6 +193,7 @@ export const guestValidation = (input: Record<string, unknown>): Validation => {
     maxLen(email, 60, "Email"),
     isEmail(email),
     maxLen(city, 30, "City"),
+    maxLen(id_proof, 30, "ID proof"),
     oneOf(id_proof, ["Aadhaar", "Passport", "Driving License", "Voter ID", "PAN"], "ID proof"),
   ]);
   return {

@@ -7,13 +7,19 @@ export async function getBookingDetail(
   _request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const params = await context.params;
+  let params: { id: string };
+  try {
+    params = await context.params;
+  } catch (error) {
+    return handleDbError(error);
+  }
   const id = idFromParam(params.id);
   if (id === null) return fail("Invalid booking id", 400);
   try {
     const [bookings, bills, serviceOrders, payments] = await Promise.all([
       query<RowDataPacket[]>(
         `SELECT b.booking_id, b.check_in, b.check_out,
+                b.check_in <= CURDATE() AS can_check_in,
                 DATEDIFF(b.check_out, b.check_in) AS nights,
                 b.no_of_guests, b.status, b.guest_id,
                 g.full_name, g.phone, g.email, g.city, g.id_proof,
@@ -65,6 +71,7 @@ export async function getBookingDetail(
           check_out: row.check_out,
           nights: row.nights,
         },
+        can_check_in: row.can_check_in,
         no_of_guests: row.no_of_guests,
         status: row.status,
         guest: {

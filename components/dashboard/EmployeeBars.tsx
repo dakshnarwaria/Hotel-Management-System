@@ -19,6 +19,9 @@ export default function EmployeeBars({
   return (
     <section className="surface dashboard-card">
       <h2 className="dashboard-card-title">Bookings per employee</h2>
+      {rows.length === 0 ? (
+        <p className="chart-empty">No booking-handling employees yet. Add a receptionist or manager.</p>
+      ) : (
       <div className="chart-frame">
         <ResponsiveContainer width="100%" height={260}>
           <BarChart
@@ -49,6 +52,7 @@ export default function EmployeeBars({
           </BarChart>
         </ResponsiveContainer>
       </div>
+      )}
     </section>
   );
 }

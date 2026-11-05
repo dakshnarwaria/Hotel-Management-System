@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Search, UsersRound } from "lucide-react";
 import Button from "@/components/Button";
+import ErrorCard from "@/components/ErrorCard";
 import GuestFormFields, {
   type GuestFormValues,
 } from "@/components/GuestFormFields";
@@ -14,6 +15,7 @@ import { formatCurrency, formatDate, floorLabel } from "@/lib/format";
 import type { AvailableRoom, Employee, Guest } from "@/lib/types";
 import { masterDataConfigs, type FormValues } from "@/components/masterDataConfigs";
 import { useToast } from "@/components/Toast";
+import { isMySqlDate, positiveInt } from "@/lib/validate";
 
 type Props = {
   open: boolean;
@@ -74,11 +76,15 @@ export default function NewBookingModal({
   const [guestErrors, setGuestErrors] = useState<Record<string, string>>({});
   const [savingGuest, setSavingGuest] = useState(false);
   const [employeeError, setEmployeeError] = useState("");
+  const [dropdownError, setDropdownError] = useState<string | null>(null);
+  const [dropdownRetry, setDropdownRetry] = useState(0);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!open) return;
     let active = true;
     async function fetchDropdowns() {
+      setDropdownError(null);
       try {
         const [guestRows, employeeRows] = await Promise.all([
           request<Guest[]>("/api/guests"),
@@ -94,15 +100,21 @@ export default function NewBookingModal({
         setSelectedEmployee((current) =>
           current || (preferred ? String(preferred.emp_id) : ""),
         );
-      } catch {
-        // useApi displays request errors as toasts.
+      } catch (requestError) {
+        if (active) {
+          setDropdownError(
+            requestError instanceof Error
+              ? requestError.message
+              : "Could not load guests or employees",
+          );
+        }
       }
     }
     void fetchDropdowns();
     return () => {
       active = false;
     };
-  }, [open, request]);
+  }, [dropdownRetry, open, request]);
 
   const filteredGuests = useMemo(() => {
     const term = guestSearch.trim().toLowerCase();
@@ -147,24 +159,28 @@ export default function NewBookingModal({
       setStep(1);
     }
     setError("");
+    setFieldErrors({});
   }
 
   async function findRooms(preserveError = false) {
-    const validation: string[] = [];
-    if (!selectedGuest) validation.push("Select a guest");
-    if (!checkIn) validation.push("Check-in date is required");
-    if (!checkOut) validation.push("Check-out date is required");
-    if (checkIn && checkIn < localDate(new Date())) {
-      validation.push("Check-in cannot be in the past");
+    const validation: Record<string, string> = {};
+    if (!selectedGuest) validation.guest_id = "Select a guest";
+    if (!checkIn) validation.check_in = "Check-in date is required";
+    else if (!isMySqlDate(checkIn)) {
+      validation.check_in = "Check-in must be a valid date";
     }
-    if (checkIn && checkOut && checkOut <= checkIn) {
-      validation.push("Check-out must be after check-in");
+    if (!checkOut) validation.check_out = "Check-out date is required";
+    else if (!isMySqlDate(checkOut)) {
+      validation.check_out = "Check-out must be a valid date";
     }
-    if (!/^[1-9]\d*$/.test(guestCount)) {
-      validation.push("Number of guests must be a positive integer");
+    if (isMySqlDate(checkIn) && isMySqlDate(checkOut) && checkOut <= checkIn) {
+      validation.check_out = "Check-out must be after check-in";
     }
-    if (validation.length) {
-      setError(validation.join(", "));
+    const guestCountError = positiveInt(guestCount, "Number of guests");
+    if (guestCountError) validation.no_of_guests = guestCountError;
+    setFieldErrors(validation);
+    if (Object.keys(validation).length > 0) {
+      setError("");
       return;
     }
 
@@ -184,11 +200,14 @@ export default function NewBookingModal({
       setAvailableRooms(rooms);
       setStep(2);
     } catch (requestError) {
-      setError(
+      const message =
         requestError instanceof Error
           ? requestError.message
-          : "Could not load available rooms",
-      );
+          : "Could not load available rooms";
+      setError(message);
+      if (message.toLowerCase().includes("check-in")) {
+        setFieldErrors((current) => ({ ...current, check_in: message }));
+      }
     } finally {
       setFindingRooms(false);
     }
@@ -227,8 +246,12 @@ export default function NewBookingModal({
       setGuestValues({ ...emptyGuest });
       setGuestErrors({});
       setGuestModalOpen(false);
-    } catch {
-      // useApi displays request errors as toasts.
+    } catch (requestError) {
+      const message =
+        requestError instanceof Error ? requestError.message : "Could not add guest";
+      if (message.toLowerCase().includes("phone")) {
+        setGuestErrors((current) => ({ ...current, phone: message }));
+      }
     } finally {
       setSavingGuest(false);
     }
@@ -238,6 +261,10 @@ export default function NewBookingModal({
     event.preventDefault();
     if (!selectedGuest || !selectedRoom) {
       setError("Select a guest and an available room");
+      setFieldErrors({
+        ...(!selectedGuest ? { guest_id: "Select a guest" } : {}),
+        ...(!selectedRoom ? { room_no: "Select an available room" } : {}),
+      });
       setStep(!selectedGuest ? 1 : 2);
       return;
     }
@@ -283,10 +310,18 @@ export default function NewBookingModal({
       setError(message);
       if (
         message.toLowerCase().includes("already booked") ||
+        message.toLowerCase().includes("maintenance") ||
+        message.toLowerCase().includes("capacity")
+      ) {
+        setFieldErrors((current) => ({ ...current, room_no: message }));
+      }
+      if (
+        message.toLowerCase().includes("already booked") ||
         message.toLowerCase().includes("under maintenance")
       ) {
         setStep(2);
         await findRooms(true);
+        setFieldErrors((current) => ({ ...current, room_no: message }));
       }
     } finally {
       setSaving(false);
@@ -332,6 +367,12 @@ export default function NewBookingModal({
         {step === 1 && (
           <div className="booking-step-content">
             <h3>Stay details</h3>
+            {dropdownError && (
+              <ErrorCard
+                message={dropdownError}
+                onRetry={() => setDropdownRetry((current) => current + 1)}
+              />
+            )}
             <div className="guest-picker">
               <label className="form-field">
                 <span className="field-label">Guest <span className="required-mark">*</span></span>
@@ -342,6 +383,11 @@ export default function NewBookingModal({
                     onChange={(event) => {
                       setGuestSearch(event.target.value);
                       setSelectedGuest(null);
+                      setFieldErrors((current) => {
+                        const next = { ...current };
+                        delete next.guest_id;
+                        return next;
+                      });
                     }}
                     placeholder="Search by guest name or phone"
                     role="combobox"
@@ -349,6 +395,11 @@ export default function NewBookingModal({
                     aria-controls="guest-suggestions"
                   />
                 </span>
+                {fieldErrors.guest_id && (
+                  <span className="field-error" role="alert">
+                    {fieldErrors.guest_id}
+                  </span>
+                )}
               </label>
               {guestSearch && !selectedGuest && filteredGuests.length > 0 && (
                 <div
@@ -366,6 +417,11 @@ export default function NewBookingModal({
                       onClick={() => {
                         setSelectedGuest(guest);
                         setGuestSearch(`${guest.full_name} (${guest.phone})`);
+                        setFieldErrors((current) => {
+                          const next = { ...current };
+                          delete next.guest_id;
+                          return next;
+                        });
                       }}
                     >
                       <strong>{guest.full_name}</strong>
@@ -400,8 +456,8 @@ export default function NewBookingModal({
                 label="Check-in"
                 type="date"
                 required
-                min={localDate(new Date())}
                 value={checkIn}
+                error={fieldErrors.check_in}
                 onChange={(event) => {
                   invalidateRoomSearch();
                   setCheckIn(event.target.value);
@@ -417,6 +473,7 @@ export default function NewBookingModal({
                 required
                 min={tomorrow(checkIn)}
                 value={checkOut}
+                error={fieldErrors.check_out}
                 onChange={(event) => {
                   invalidateRoomSearch();
                   setCheckOut(event.target.value);
@@ -430,6 +487,7 @@ export default function NewBookingModal({
                 step={1}
                 required
                 value={guestCount}
+                error={fieldErrors.no_of_guests}
                 onChange={(event) => {
                   invalidateRoomSearch();
                   setGuestCount(event.target.value);
@@ -454,6 +512,11 @@ export default function NewBookingModal({
         {step === 2 && (
           <div className="booking-step-content">
             <h3>Choose a room</h3>
+            {fieldErrors.room_no && (
+              <p className="field-error" role="alert">
+                {fieldErrors.room_no}
+              </p>
+            )}
             <p className="muted">
               {formatDate(checkIn)} to {formatDate(checkOut)} · {guestCount}{" "}
               {Number(guestCount) === 1 ? "guest" : "guests"}

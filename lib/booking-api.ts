@@ -1,14 +1,15 @@
 import type { RowDataPacket } from "mysql2/promise";
 import { fail, handleDbError, ok } from "@/lib/api";
 import { query, withConnection } from "@/lib/db";
-import { positiveInt } from "@/lib/validate";
+import { isMySqlDate, positiveInt } from "@/lib/validate";
 
 export const bookingSelect = `
   SELECT b.booking_id, b.guest_id, g.full_name, g.phone, b.room_no,
          rt.type_name, b.emp_id, e.emp_name, b.check_in, b.check_out,
          DATEDIFF(b.check_out, b.check_in) AS nights,
          rt.price_per_night AS room_rate, b.no_of_guests,
-         b.status, bb.room_charge, bb.room_gst_rate, bb.room_gst,
+         b.status, b.check_in <= CURDATE() AS can_check_in,
+         bb.room_charge, bb.room_gst_rate, bb.room_gst,
          bb.services_total, bb.services_gst_rate, bb.services_gst,
          bb.total_gst, bb.grand_total,
          bb.paid, bb.balance
@@ -17,19 +18,18 @@ export const bookingSelect = `
   JOIN Rooms r ON r.room_no = b.room_no
   JOIN Room_Types rt ON rt.type_id = r.type_id
   JOIN Employees e ON e.emp_id = b.emp_id
-  JOIN booking_bills bb ON bb.booking_id = b.booking_id`;
+  JOIN booking_bills bb ON bb.booking_id = b.booking_id
+  WHERE (? IS NULL OR b.booking_id = ?)
+    AND (? IS NULL OR b.status = ?)
+    AND (? IS NULL OR g.full_name LIKE ? OR g.phone LIKE ?
+         OR CAST(b.room_no AS CHAR) LIKE ?)
+    AND (? IS NULL OR (b.check_in <= ? AND b.check_out >= ?))
+  ORDER BY b.booking_id DESC`;
 
 const bookingStatuses = ["Confirmed", "Checked-In", "Checked-Out", "Cancelled"];
 
 function isValidDate(value: unknown): value is string {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return false;
-  }
-  const date = new Date(`${value}T00:00:00Z`);
-  return (
-    Number.isFinite(date.getTime()) &&
-    date.toISOString().slice(0, 10) === value
-  );
+  return isMySqlDate(value);
 }
 
 function dateDiffError(start: string, end: string): string | null {
@@ -43,7 +43,9 @@ function validParamDate(value: string, label: string) {
 function routeId(value: string): number | null {
   if (!/^\d+$/.test(value)) return null;
   const id = Number(value);
-  return Number.isSafeInteger(id) && id > 0 ? id : null;
+  return Number.isSafeInteger(id) && id > 0 && id <= 2_147_483_647
+    ? id
+    : null;
 }
 
 export async function listBookings(request: Request) {
@@ -73,30 +75,23 @@ export async function listBookings(request: Request) {
   }
   if (errors.length) return fail(errors.join(", "));
 
-  const filters: string[] = [];
-  const values: (string | number)[] = [];
-  if (status && status !== "All") {
-    filters.push("b.status = ?");
-    values.push(status);
-  }
-  if (search) {
-    const pattern = `%${search}%`;
-    filters.push(
-      "(g.full_name LIKE ? OR g.phone LIKE ? OR CAST(b.room_no AS CHAR) LIKE ?)",
-    );
-    values.push(pattern, pattern, pattern);
-  }
-  if (from && to) {
-    filters.push("b.check_in <= ? AND b.check_out >= ?");
-    values.push(to, from);
-  }
-
   try {
-    const where = filters.length ? ` WHERE ${filters.join(" AND ")}` : "";
     const [bookings, counts] = await Promise.all([
       query<RowDataPacket[]>(
-        `${bookingSelect}${where} ORDER BY b.booking_id DESC`,
-        values,
+        bookingSelect,
+        [
+          null,
+          null,
+          status && status !== "All" ? status : null,
+          status && status !== "All" ? status : null,
+          search || null,
+          `%${search}%`,
+          `%${search}%`,
+          `%${search}%`,
+          from && to ? from : null,
+          to,
+          from,
+        ],
       ),
       query<RowDataPacket[]>(
         `SELECT
@@ -174,11 +169,18 @@ export async function createBooking(request: Request) {
   try {
     const booking = await withConnection(async (connection) => {
       const [dateRows] = await connection.execute<RowDataPacket[]>(
-        "SELECT ? >= CURDATE() AS valid_check_in",
-        [values.check_in],
+        "SELECT (? >= CURDATE()) AND EXISTS (SELECT 1 FROM Guests WHERE guest_id = ?) AND EXISTS (SELECT 1 FROM Employees WHERE emp_id = ?) AS valid_inputs",
+        [values.check_in, values.guest_id, values.emp_id],
       );
-      if (Number(dateRows[0]?.valid_check_in) !== 1) {
-        throw new BookingInputError("Check-in date cannot be in the past");
+      if (Number(dateRows[0]?.valid_inputs) !== 1) {
+        const [dateOnlyRows] = await connection.execute<RowDataPacket[]>(
+          "SELECT ? >= CURDATE() AS valid_check_in",
+          [values.check_in],
+        );
+        if (Number(dateOnlyRows[0]?.valid_check_in) !== 1) {
+          throw new BookingInputError("Check-in date cannot be in the past");
+        }
+        return null;
       }
       await connection.query(
         "CALL book_room(?,?,?,?,?,?,@new_id)",
@@ -199,12 +201,12 @@ export async function createBooking(request: Request) {
         throw new Error("Booking procedure did not return a booking id");
       }
       const [savedRows] = await connection.execute<RowDataPacket[]>(
-        `${bookingSelect} WHERE b.booking_id = ?`,
-        [id],
+        bookingSelect,
+        [id, id, null, null, null, null, null, null, null, null, null],
       );
       return savedRows[0] ?? null;
     });
-    if (!booking) return fail("The booking was created but could not be loaded", 500);
+    if (!booking) return fail("Guest or employee was not found", 404);
     return ok(booking, 201);
   } catch (error) {
     if (error instanceof BookingInputError) return fail(error.message, 400);
@@ -221,7 +223,12 @@ export async function bookingAction(
   context: { params: Promise<{ id: string }> },
   action: Action,
 ) {
-  const params = await context.params;
+  let params: { id: string };
+  try {
+    params = await context.params;
+  } catch (error) {
+    return handleDbError(error);
+  }
   const id = routeId(params.id);
   if (id === null) return fail("Invalid booking id", 400);
 
@@ -266,8 +273,8 @@ export async function bookingAction(
       }
 
       const [updated] = await connection.execute<RowDataPacket[]>(
-        `${bookingSelect} WHERE b.booking_id = ?`,
-        [id],
+        bookingSelect,
+        [id, id, null, null, null, null, null, null, null, null, null],
       );
       return { booking: updated[0] ?? null } as const;
     });

@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatCompactINR, formatCurrency } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
 import type { DashboardData } from "@/components/dashboard/types";
 
 export default function TopServices({
@@ -21,7 +21,7 @@ export default function TopServices({
     <section className="surface dashboard-card">
       <h2 className="dashboard-card-title">Top services by revenue</h2>
       {rows.length === 0 ? (
-        <p className="chart-empty">No service orders yet.</p>
+        <p className="chart-empty">No service orders yet. Add one from a checked-in booking.</p>
       ) : (
         <div className="chart-frame">
           <ResponsiveContainer width="100%" height={260}>
@@ -33,7 +33,7 @@ export default function TopServices({
               <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3" />
               <XAxis
                 type="number"
-                tickFormatter={(value: number) => formatCompactINR(value)}
+                tickFormatter={(value: number) => formatCurrency(value)}
                 tick={{ fill: "var(--chart-axis)", fontSize: 11 }}
                 stroke="var(--chart-axis)"
                 tickLine={false}

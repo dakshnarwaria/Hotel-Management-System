@@ -6,6 +6,7 @@ import { ClipboardList, CreditCard, Trash2, TrendingUp } from "lucide-react";
 import Button from "@/components/Button";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import DataTable, { type DataColumn } from "@/components/DataTable";
+import ErrorCard from "@/components/ErrorCard";
 import { FormField, SelectField } from "@/components/FormField";
 import PageHeader from "@/components/PageHeader";
 import SearchInput from "@/components/SearchInput";
@@ -53,6 +54,7 @@ export default function ServiceOrdersPage() {
     rows: orders,
     summary: listSummary,
     loading,
+    error,
     refresh,
   } = useList<ServiceOrder, ServiceOrderSummary>("/api/service-orders", {
     ...(serviceId ? { service_id: serviceId } : {}),
@@ -62,6 +64,7 @@ export default function ServiceOrdersPage() {
   const summary = listSummary ?? emptySummary;
   const [services, setServices] = useState<Service[]>([]);
   const [servicesLoaded, setServicesLoaded] = useState(false);
+  const [servicesError, setServicesError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ServiceOrder | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -69,10 +72,14 @@ export default function ServiceOrdersPage() {
   async function loadServices() {
     if (servicesLoaded) return;
     setServicesLoaded(true);
+    setServicesError(null);
     try {
       setServices(await request<Service[]>("/api/services"));
-    } catch {
+    } catch (error) {
       setServicesLoaded(false);
+      setServicesError(
+        error instanceof Error ? error.message : "Could not load services",
+      );
     }
   }
 
@@ -113,9 +120,7 @@ export default function ServiceOrdersPage() {
         "Service order removed",
       );
       setDeleteTarget(null);
-      refresh();
     } catch {
-      // useApi displays request errors as toasts.
     } finally {
       setDeleting(false);
     }
@@ -192,11 +197,18 @@ export default function ServiceOrdersPage() {
         />
       </section>
 
+      {servicesError && (
+        <ErrorCard
+          message={servicesError}
+          onRetry={() => void loadServices()}
+        />
+      )}
+      {error && <ErrorCard message={error} onRetry={refresh} />}
       <DataTable
         columns={columns}
         rows={orders}
         loading={loading}
-        emptyMessage="No service orders match these filters."
+        emptyMessage="No service orders match these filters. Add an order from a checked-in booking or adjust the filters."
         rowKey={(row) => row.order_id}
         actions={(row) =>
           row.booking_status === "Checked-In" ? (
@@ -221,7 +233,6 @@ export default function ServiceOrdersPage() {
         onClose={() => setModalOpen(false)}
         onAdded={() => {
           setModalOpen(false);
-          refresh();
         }}
       />
       <ConfirmDialog

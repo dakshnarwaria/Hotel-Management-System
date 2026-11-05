@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import {
   useEffect,
   useRef,
+  useId,
   type MouseEvent,
   type ReactNode,
 } from "react";
@@ -18,6 +19,7 @@ type Props = {
 export default function Modal({ open, title, onClose, children }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
+  const titleId = useId();
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -51,7 +53,10 @@ export default function Modal({ open, title, onClose, children }: Props) {
       if (!items?.length) return;
       const first = items[0];
       const last = items[items.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
+      if (!dialog?.contains(document.activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
         last.focus();
       } else if (!event.shiftKey && document.activeElement === last) {
@@ -80,10 +85,10 @@ export default function Modal({ open, title, onClose, children }: Props) {
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="modal-title"
+        aria-labelledby={titleId}
       >
         <header className="modal-header">
-          <h2 id="modal-title">{title}</h2>
+          <h2 id={titleId}>{title}</h2>
           <button
             type="button"
             className="icon-button"
