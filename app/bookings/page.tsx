@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ArrowRight, CalendarCheck, CalendarClock, LogOut, XCircle } from "lucide-react";
 import Button from "@/components/Button";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -14,11 +14,11 @@ import PageHeader from "@/components/PageHeader";
 import SearchInput from "@/components/SearchInput";
 import StatusBadge from "@/components/StatusBadge";
 import { useApi } from "@/hooks/useApi";
+import { useList } from "@/hooks/useList";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { Booking } from "@/lib/types";
 
 type Counts = Record<"All" | Booking["status"], number>;
-type BookingList = { bookings: Booking[]; counts: Counts };
 const tabs: { label: keyof Counts; status: string }[] = [
   { label: "All", status: "" },
   { label: "Confirmed", status: "Confirmed" },
@@ -39,79 +39,30 @@ function todayLocal() {
 
 export default function BookingsPage() {
   const request = useApi();
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [counts, setCounts] = useState<Counts>({
+  const [status, setStatus] = useState("");
+  const [search, setSearch] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const { rows: bookings, summary, loading, refresh } = useList<Booking, Counts>(
+    "/api/bookings",
+    {
+      ...(status ? { status } : {}),
+      ...(search ? { search } : {}),
+      ...(from && to ? { from, to } : {}),
+    },
+  );
+  const counts = summary ?? {
     All: 0,
     Confirmed: 0,
     "Checked-In": 0,
     "Checked-Out": 0,
     Cancelled: 0,
-  });
-  const [hasLoaded, setHasLoaded] = useState(false);
-  const [status, setStatus] = useState("");
-  const [search, setSearch] = useState("");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  };
   const [newBookingOpen, setNewBookingOpen] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<Booking | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [finalBill, setFinalBill] = useState<BillData | null>(null);
-
-  const searchChanged = useCallback((value: string) => {
-    setHasLoaded(false);
-    setSearch(value);
-  }, []);
-
-  const loadBookings = useCallback(async () => {
-    setHasLoaded(false);
-    try {
-      const params = new URLSearchParams();
-      if (status) params.set("status", status);
-      if (search) params.set("search", search);
-      if (from && to) {
-        params.set("from", from);
-        params.set("to", to);
-      }
-      const queryString = params.size ? `?${params.toString()}` : "";
-      const result = await request<BookingList>(`/api/bookings${queryString}`);
-      setBookings(result.bookings);
-      setCounts(result.counts);
-    } catch {
-      setBookings([]);
-    } finally {
-      setHasLoaded(true);
-    }
-  }, [from, request, search, status, to]);
-
-  useEffect(() => {
-    let active = true;
-    async function fetchBookings() {
-      try {
-        const params = new URLSearchParams();
-        if (status) params.set("status", status);
-        if (search) params.set("search", search);
-        if (from && to) {
-          params.set("from", from);
-          params.set("to", to);
-        }
-        const queryString = params.size ? `?${params.toString()}` : "";
-        const result = await request<BookingList>(`/api/bookings${queryString}`);
-        if (active) {
-          setBookings(result.bookings);
-          setCounts(result.counts);
-        }
-      } catch {
-        if (active) setBookings([]);
-      } finally {
-        if (active) setHasLoaded(true);
-      }
-    }
-    void fetchBookings();
-    return () => {
-      active = false;
-    };
-  }, [from, request, search, status, to]);
 
   async function checkIn(booking: Booking) {
     setActionLoading(booking.booking_id);
@@ -121,8 +72,7 @@ export default function BookingsPage() {
         { method: "POST" },
         `Booking #${booking.booking_id} checked in`,
       );
-      setHasLoaded(false);
-      await loadBookings();
+      refresh();
     } catch {
       // useApi displays request errors as toasts.
     } finally {
@@ -139,8 +89,7 @@ export default function BookingsPage() {
         `Booking #${booking.booking_id} checked out`,
       );
       setFinalBill(bill);
-      setHasLoaded(false);
-      await loadBookings();
+      refresh();
     } catch {
       // useApi displays request errors as toasts.
     } finally {
@@ -158,8 +107,7 @@ export default function BookingsPage() {
         `Booking #${cancelTarget.booking_id} cancelled`,
       );
       setCancelTarget(null);
-      setHasLoaded(false);
-      await loadBookings();
+      refresh();
     } catch {
       // useApi displays request errors as toasts.
     } finally {
@@ -247,10 +195,7 @@ export default function BookingsPage() {
             aria-selected={status === tab.status}
             className={status === tab.status ? "active" : ""}
             key={tab.label}
-            onClick={() => {
-              setHasLoaded(false);
-              setStatus(tab.status);
-            }}
+            onClick={() => setStatus(tab.status)}
           >
             {tab.label}
             <span>{counts[tab.label]}</span>
@@ -260,7 +205,7 @@ export default function BookingsPage() {
 
       <div className="resource-toolbar booking-toolbar">
         <SearchInput
-          onChange={searchChanged}
+          onChange={setSearch}
           placeholder="Search guest, phone or room..."
         />
         <FormField
@@ -268,10 +213,7 @@ export default function BookingsPage() {
           label="From"
           type="date"
           value={from}
-          onChange={(event) => {
-            setHasLoaded(false);
-            setFrom(event.target.value);
-          }}
+          onChange={(event) => setFrom(event.target.value)}
         />
         <FormField
           name="to"
@@ -279,17 +221,14 @@ export default function BookingsPage() {
           type="date"
           value={to}
           min={from || undefined}
-          onChange={(event) => {
-            setHasLoaded(false);
-            setTo(event.target.value);
-          }}
+          onChange={(event) => setTo(event.target.value)}
         />
       </div>
 
       <DataTable<Booking>
         columns={columns}
         rows={bookings}
-        loading={!hasLoaded}
+        loading={loading}
         emptyMessage="No bookings match these filters."
         rowKey={(row) => row.booking_id}
         actions={(booking) => {
@@ -363,8 +302,7 @@ export default function BookingsPage() {
         onClose={() => setNewBookingOpen(false)}
         onCreated={() => {
           setNewBookingOpen(false);
-          setHasLoaded(false);
-          void loadBookings();
+          refresh();
         }}
       />
     </>

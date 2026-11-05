@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ClipboardList, CreditCard, Trash2, TrendingUp } from "lucide-react";
 import Button from "@/components/Button";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -11,6 +11,7 @@ import PageHeader from "@/components/PageHeader";
 import SearchInput from "@/components/SearchInput";
 import AddServiceModal from "@/components/bookings/AddServiceModal";
 import { useApi } from "@/hooks/useApi";
+import { useList } from "@/hooks/useList";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { Service } from "@/lib/types";
 
@@ -28,17 +29,14 @@ type ServiceOrder = {
   line_total: number;
 };
 
-type ServiceOrderResponse = {
-  orders: ServiceOrder[];
-  summary: {
-    total_revenue: number;
-    orders_count: number;
-    top_service_name: string | null;
-    top_service_quantity: number;
-  };
+type ServiceOrderSummary = {
+  total_revenue: number;
+  orders_count: number;
+  top_service_name: string | null;
+  top_service_quantity: number;
 };
 
-const emptySummary: ServiceOrderResponse["summary"] = {
+const emptySummary: ServiceOrderSummary = {
   total_revenue: 0,
   orders_count: 0,
   top_service_name: null,
@@ -47,88 +45,36 @@ const emptySummary: ServiceOrderResponse["summary"] = {
 
 export default function ServiceOrdersPage() {
   const request = useApi();
-  const [orders, setOrders] = useState<ServiceOrder[]>([]);
-  const [summary, setSummary] = useState(emptySummary);
-  const [services, setServices] = useState<Service[]>([]);
-  const [hasLoaded, setHasLoaded] = useState(false);
   const [serviceId, setServiceId] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [search, setSearch] = useState("");
+  const {
+    rows: orders,
+    summary: listSummary,
+    loading,
+    refresh,
+  } = useList<ServiceOrder, ServiceOrderSummary>("/api/service-orders", {
+    ...(serviceId ? { service_id: serviceId } : {}),
+    ...(from && to ? { from, to } : {}),
+    ...(search ? { search } : {}),
+  });
+  const summary = listSummary ?? emptySummary;
+  const [services, setServices] = useState<Service[]>([]);
+  const [servicesLoaded, setServicesLoaded] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ServiceOrder | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const searchChanged = useCallback((value: string) => {
-    setHasLoaded(false);
-    setSearch(value);
-  }, []);
-
-  const loadOrders = useCallback(async () => {
-    setHasLoaded(false);
+  async function loadServices() {
+    if (servicesLoaded) return;
+    setServicesLoaded(true);
     try {
-      const params = new URLSearchParams();
-      if (serviceId) params.set("service_id", serviceId);
-      if (from && to) {
-        params.set("from", from);
-        params.set("to", to);
-      }
-      if (search) params.set("search", search);
-      const suffix = params.size ? `?${params.toString()}` : "";
-      const result = await request<ServiceOrderResponse>(`/api/service-orders${suffix}`);
-      setOrders(result.orders);
-      setSummary(result.summary);
-    } finally {
-      setHasLoaded(true);
+      setServices(await request<Service[]>("/api/services"));
+    } catch {
+      setServicesLoaded(false);
     }
-  }, [from, request, search, serviceId, to]);
-
-  useEffect(() => {
-    let active = true;
-    async function fetchOrders() {
-      setHasLoaded(false);
-      try {
-        const params = new URLSearchParams();
-        if (serviceId) params.set("service_id", serviceId);
-        if (from && to) {
-          params.set("from", from);
-          params.set("to", to);
-        }
-        if (search) params.set("search", search);
-        const suffix = params.size ? `?${params.toString()}` : "";
-        const result = await request<ServiceOrderResponse>(`/api/service-orders${suffix}`);
-        if (active) {
-          setOrders(result.orders);
-          setSummary(result.summary);
-        }
-      } catch {
-        if (active) {
-          setOrders([]);
-          setSummary(emptySummary);
-        }
-      } finally {
-        if (active) setHasLoaded(true);
-      }
-    }
-    void fetchOrders();
-    return () => {
-      active = false;
-    };
-  }, [from, request, search, serviceId, to]);
-
-  useEffect(() => {
-    let active = true;
-    request<Service[]>("/api/services")
-      .then((rows) => {
-        if (active) setServices(rows);
-      })
-      .catch(() => {
-        if (active) setServices([]);
-      });
-    return () => {
-      active = false;
-    };
-  }, [request]);
+  }
 
   const columns = useMemo<DataColumn<ServiceOrder>[]>(
     () => [
@@ -167,7 +113,7 @@ export default function ServiceOrdersPage() {
         "Service order removed",
       );
       setDeleteTarget(null);
-      await loadOrders();
+      refresh();
     } catch {
       // useApi displays request errors as toasts.
     } finally {
@@ -210,7 +156,7 @@ export default function ServiceOrdersPage() {
 
       <section className="resource-toolbar service-order-toolbar" aria-label="Service order filters">
         <SearchInput
-          onChange={searchChanged}
+          onChange={setSearch}
           placeholder="Search guest or booking id..."
         />
         <SelectField
@@ -225,8 +171,8 @@ export default function ServiceOrdersPage() {
               label: service.service_name,
             })),
           ]}
+          onFocus={() => void loadServices()}
           onChange={(event) => {
-            setHasLoaded(false);
             setServiceId(event.target.value);
           }}
         />
@@ -235,27 +181,21 @@ export default function ServiceOrdersPage() {
           label="From"
           type="date"
           value={from}
-          onChange={(event) => {
-            setHasLoaded(false);
-            setFrom(event.target.value);
-          }}
+          onChange={(event) => setFrom(event.target.value)}
         />
         <FormField
           name="service-order-to"
           label="To"
           type="date"
           value={to}
-          onChange={(event) => {
-            setHasLoaded(false);
-            setTo(event.target.value);
-          }}
+          onChange={(event) => setTo(event.target.value)}
         />
       </section>
 
       <DataTable
         columns={columns}
         rows={orders}
-        loading={!hasLoaded}
+        loading={loading}
         emptyMessage="No service orders match these filters."
         rowKey={(row) => row.order_id}
         actions={(row) =>
@@ -281,7 +221,7 @@ export default function ServiceOrdersPage() {
         onClose={() => setModalOpen(false)}
         onAdded={() => {
           setModalOpen(false);
-          void loadOrders().catch(() => undefined);
+          refresh();
         }}
       />
       <ConfirmDialog

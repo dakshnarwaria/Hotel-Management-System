@@ -13,16 +13,22 @@ export default function SearchInput({
   placeholder = "Search...",
 }: Props) {
   const [value, setValue] = useState("");
-  const initialized = useRef(false);
+  const onChangeRef = useRef(onChange);
+  const lastEmittedValue = useRef("");
 
   useEffect(() => {
-    if (!initialized.current) {
-      initialized.current = true;
-      return;
-    }
-    const timer = window.setTimeout(() => onChange(value.trim()), 300);
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  useEffect(() => {
+    const nextValue = value.trim();
+    if (nextValue === lastEmittedValue.current) return;
+    const timer = window.setTimeout(() => {
+      lastEmittedValue.current = nextValue;
+      onChangeRef.current(nextValue);
+    }, 300);
     return () => window.clearTimeout(timer);
-  }, [value, onChange]);
+  }, [value]);
 
   return (
     <label className="search-input">

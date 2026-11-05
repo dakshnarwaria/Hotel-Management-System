@@ -103,7 +103,7 @@ export default function DataTable<T>({
             </tr>
           </thead>
           <tbody>
-            {loading ? (
+            {loading && rows.length === 0 ? (
               Array.from({ length: 5 }, (_, index) => (
                 <tr key={`skeleton-${index}`}>
                   {columns.map((column) => (

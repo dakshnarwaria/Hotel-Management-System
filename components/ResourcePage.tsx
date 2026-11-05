@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pencil, Plus, Trash2, X } from "lucide-react";
 import Button from "@/components/Button";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -13,14 +13,13 @@ import StatusBadge from "@/components/StatusBadge";
 import GuestFormFields from "@/components/GuestFormFields";
 import { masterDataConfigs, type FormValues } from "@/components/masterDataConfigs";
 import { useApi } from "@/hooks/useApi";
+import { useList } from "@/hooks/useList";
 
 type Row = Record<string, unknown>;
 
 export default function ResourcePage({ resource }: { resource: string }) {
   const config = masterDataConfigs[resource];
   const request = useApi();
-  const [rows, setRows] = useState<Row[]>([]);
-  const [hasLoaded, setHasLoaded] = useState(false);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [availabilityOn, setAvailabilityOn] = useState("");
@@ -36,66 +35,20 @@ export default function ResourcePage({ resource }: { resource: string }) {
     null,
   );
 
-  const searchChanged = useCallback((value: string) => {
-    setHasLoaded(false);
-    setSearch(value);
-  }, []);
-
-  const load = useCallback(async () => {
-    setHasLoaded(false);
-    try {
-      const params = new URLSearchParams();
-      if (search) params.set("search", search);
-      for (const [key, value] of Object.entries(filters)) {
-        if (value) params.set(key, value);
-      }
-      if (resource === "rooms" && availabilityOn) {
-        params.set("availability_on", availabilityOn);
-      }
-      const queryString = params.size ? `?${params.toString()}` : "";
-      const data = await request<Row[]>(`${config.endpoint}${queryString}`);
-      setRows(data);
-    } catch {
-      setRows([]);
-    } finally {
-      setHasLoaded(true);
-    }
-  }, [availabilityOn, config.endpoint, filters, request, resource, search]);
+  const { rows, loading, refresh } = useList<Row>(config.endpoint, {
+    ...filters,
+    ...(search ? { search } : {}),
+    ...(resource === "rooms" && availabilityOn
+      ? { availability_on: availabilityOn }
+      : {}),
+  });
 
   useEffect(() => {
-    let active = true;
-    async function fetchRows() {
-      try {
-        setHasLoaded(false);
-        const params = new URLSearchParams();
-        if (search) params.set("search", search);
-        for (const [key, value] of Object.entries(filters)) {
-          if (value) params.set(key, value);
-        }
-        if (resource === "rooms" && availabilityOn) {
-          params.set("availability_on", availabilityOn);
-        }
-        const queryString = params.size ? `?${params.toString()}` : "";
-        const data = await request<Row[]>(`${config.endpoint}${queryString}`);
-        if (active) setRows(data);
-      } catch {
-        if (active) setRows([]);
-      } finally {
-        if (active) setHasLoaded(true);
-      }
-    }
-    void fetchRows();
-    return () => {
-      active = false;
-    };
-  }, [availabilityOn, config.endpoint, filters, request, resource, search]);
-
-  useEffect(() => {
-    if (!config.roomOptions) return;
+    if (!config.roomOptions || !modalOpen || roomTypes.length > 0) return;
     request<Row[]>("/api/room-types")
       .then(setRoomTypes)
       .catch(() => setRoomTypes([]));
-  }, [config.roomOptions, request]);
+  }, [config.roomOptions, modalOpen, request, roomTypes.length]);
 
   const fields = useMemo(() => {
     if (!config.roomOptions) return config.fields;
@@ -176,8 +129,7 @@ export default function ResourcePage({ resource }: { resource: string }) {
         `${config.title.slice(0, -1)} ${editing ? "updated" : "added"} successfully`,
       );
       setModalOpen(false);
-      setHasLoaded(false);
-      await load();
+      refresh();
     } catch {
       // useApi displays request errors as toasts.
     } finally {
@@ -195,8 +147,7 @@ export default function ResourcePage({ resource }: { resource: string }) {
         `${config.title.slice(0, -1)} deleted successfully`,
       );
       setDeleting(null);
-      setHasLoaded(false);
-      await load();
+      refresh();
     } catch {
       // useApi displays request errors as toasts.
     } finally {
@@ -219,8 +170,7 @@ export default function ResourcePage({ resource }: { resource: string }) {
         { method: "PATCH", body: JSON.stringify({ status }) },
         `Room ${roomNo} marked ${status.toLowerCase()}`,
       );
-      setHasLoaded(false);
-      await load();
+      refresh();
     } catch {
       // useApi displays request errors as toasts.
     } finally {
@@ -249,7 +199,7 @@ export default function ResourcePage({ resource }: { resource: string }) {
 
       <div className="resource-toolbar">
         <SearchInput
-          onChange={searchChanged}
+          onChange={setSearch}
           placeholder={`Search ${config.title.toLowerCase()}...`}
         />
         {config.filters?.map((filter) => (
@@ -258,7 +208,6 @@ export default function ResourcePage({ resource }: { resource: string }) {
             <select
               value={filters[filter.name] ?? ""}
               onChange={(event) => {
-                setHasLoaded(false);
                 setFilters((current) => ({
                   ...current,
                   [filter.name]: event.target.value,
@@ -280,7 +229,6 @@ export default function ResourcePage({ resource }: { resource: string }) {
             <select
               value={filters.type_id ?? ""}
               onChange={(event) => {
-                setHasLoaded(false);
                 setFilters((current) => ({
                   ...current,
                   type_id: event.target.value,
@@ -306,7 +254,6 @@ export default function ResourcePage({ resource }: { resource: string }) {
                 aria-label="Availability on"
                 value={availabilityOn}
                 onChange={(event) => {
-                  setHasLoaded(false);
                   setAvailabilityOn(event.target.value);
                 }}
               />
@@ -318,7 +265,6 @@ export default function ResourcePage({ resource }: { resource: string }) {
                 aria-label="Clear availability date"
                 title="Clear availability date"
                 onClick={() => {
-                  setHasLoaded(false);
                   setAvailabilityOn("");
                 }}
               >
@@ -334,7 +280,7 @@ export default function ResourcePage({ resource }: { resource: string }) {
         key={dataKey}
         columns={columns}
         rows={rows}
-        loading={!hasLoaded}
+        loading={loading}
         emptyMessage={`No ${config.title.toLowerCase()} found.`}
         rowKey={(row) => String(row[config.idKey])}
         actions={(row) => (

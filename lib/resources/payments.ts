@@ -127,6 +127,9 @@ export async function listPayments(request: Request) {
   const fromSql = `FROM Payments p
     JOIN Bookings b ON b.booking_id = p.booking_id
     JOIN Guests g ON g.guest_id = b.guest_id${where}`;
+  const summaryFromSql = `${fromSql}${
+    filters.length ? " AND" : " WHERE"
+  } b.status <> 'Cancelled'`;
   try {
     const [payments, summaries] = await Promise.all([
       query<RowDataPacket[]>(
@@ -140,7 +143,7 @@ export async function listPayments(request: Request) {
                 COALESCE(SUM(CASE WHEN p.method = 'Cash' THEN p.amount ELSE 0 END), 0) AS cash,
                 COALESCE(SUM(CASE WHEN p.method = 'Card' THEN p.amount ELSE 0 END), 0) AS card,
                 COALESCE(SUM(CASE WHEN p.method = 'UPI' THEN p.amount ELSE 0 END), 0) AS upi
-         ${fromSql}`,
+         ${summaryFromSql}`,
         values,
       ),
     ]);

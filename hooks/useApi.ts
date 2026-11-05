@@ -31,6 +31,9 @@ export function useApi() {
         if (successMessage) toast(successMessage, "success");
         return result.data as T;
       } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          throw error;
+        }
         const message =
           error instanceof Error ? error.message : "Request failed";
         toast(message, "error");
